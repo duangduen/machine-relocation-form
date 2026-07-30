@@ -88,6 +88,31 @@
       apiDetail.style.display = 'block';
       apiDetail.textContent = 'err.name: ' + err.name + '\nerr.message: ' + err.message;
     });
+
+  // ---------- ทดสอบที่ 2: no-cors ไป exec URL ตัวจริง (ไม่อ่าน response แค่เช็คว่าเชื่อมต่อได้จริงไหม) ----------
+  var apiBox2 = document.createElement('div');
+  apiBox2.innerHTML =
+    '<div class="row"><div>no-cors GET (เช็คแค่การเชื่อมต่อ ไม่อ่านคำตอบ)<br><span class="url">' + API_URL + '?action=machineList</span></div><span class="status pending" id="api1">รอ...</span></div>' +
+    '<pre id="api1detail" style="background:#fff;border-radius:8px;padding:10px;font-size:11px;white-space:pre-wrap;word-break:break-all;display:none;"></pre>';
+  document.body.insertBefore(apiBox2, document.querySelector('.note'));
+
+  var apiBadge2 = document.getElementById('api1');
+  var apiDetail2 = document.getElementById('api1detail');
+  var apiController2 = new AbortController();
+  var apiTimer2 = setTimeout(function () { apiController2.abort(); }, 8000);
+  fetch(API_URL + '?action=machineList', { mode: 'no-cors', signal: apiController2.signal, cache: 'no-store' })
+    .then(function (res) {
+      clearTimeout(apiTimer2);
+      apiBadge2.textContent = 'เชื่อมต่อได้ (type: ' + res.type + ')';
+      apiBadge2.className = 'status ok';
+    })
+    .catch(function (err) {
+      clearTimeout(apiTimer2);
+      apiBadge2.textContent = 'พัง';
+      apiBadge2.className = 'status fail';
+      apiDetail2.style.display = 'block';
+      apiDetail2.textContent = 'err.name: ' + err.name + '\nerr.message: ' + err.message;
+    });
 </script>
 </body>
 </html>
