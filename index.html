@@ -288,7 +288,20 @@
     listAllRequests: 'allRequests',
     listSitesPendingReview: 'sitesPendingReview',
     listPjBacklog: 'pjBacklog',
-    listPendingAudit: 'pendingAudit'
+    listPendingAudit: 'pendingAudit',
+    // ---- เขียนข้อมูล: ย้ายมาใช้ JSONP/GET ด้วย เพราะ hidden-iframe-form POST ยังค้างอยู่แม้แก้
+    // X-Frame-Options แล้ว (สาเหตุที่แน่ชัดยังไม่เจอ) - payload พวกนี้เป็น text สั้นๆ ไม่เกิน
+    // ขีดจำกัดความยาว URL จึงส่งผ่าน query string ได้สบาย ยกเว้น markMoved ที่มีรูปแนบ (base64)
+    // อาจยาวเกิน ยังคงใช้ formPostRequest (ดูด้านล่าง) ต่อไป
+    submitRequest: 'submitRequest',
+    approveRequest: 'approveRequest',
+    rejectRequest: 'rejectRequest',
+    claimJob: 'claimJob',
+    releaseJob: 'releaseJob',
+    editRequestFields: 'editRequestFields',
+    issuePjNumber: 'issuePjNumber',
+    closeJob: 'closeJob',
+    markSiteReviewed: 'markSiteReviewed'
   };
   var GET_ACTION_ARGS = {
     whoAmI: ['userId'],
@@ -301,31 +314,38 @@
     listAllRequests: ['userId'],
     listSitesPendingReview: [],
     listPjBacklog: ['userId'],
-    listPendingAudit: ['userId']
-  };
-  var POST_ACTION_ARGS = {
+    listPendingAudit: ['userId'],
     submitRequest: ['userId', 'payload'],
     approveRequest: ['userId', 'requestId'],
     rejectRequest: ['userId', 'requestId', 'reason'],
     claimJob: ['userId', 'requestId'],
     releaseJob: ['userId', 'requestId'],
-    markMoved: ['userId', 'requestId', 'actualDate', 'photo'],
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
     markSiteReviewed: ['siteName', 'note']
   };
+  // เหลือ markMoved อย่างเดียวที่ยังต้องใช้ hidden-iframe-form POST เพราะมีรูปแนบ (base64)
+  // ที่อาจยาวเกินขีดจำกัดความยาว URL ของ JSONP/GET
+  var POST_ACTION_ARGS = {
+    markMoved: ['userId', 'requestId', 'actualDate', 'photo']
+  };
 
   /** เรียก Apps Script Web App แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้
-   *  ข้างในเปลี่ยนจาก fetch() เป็น JSONP (อ่านข้อมูล) / hidden-iframe form (เขียนข้อมูล) เพื่อเลี่ยงปัญหา
-   *  CORS ใน LINE iOS in-app browser - ดูรายละเอียดที่ jsonpRequest / formPostRequest ด้านบน */
+   *  ข้างในเปลี่ยนจาก fetch() เป็น JSONP (อ่าน+เขียนข้อมูลเกือบทั้งหมด) / hidden-iframe form
+   *  (เฉพาะ markMoved ที่มีรูปแนบ) เพื่อเลี่ยงปัญหา CORS ใน LINE iOS in-app browser
+   *  - ดูรายละเอียดที่ jsonpRequest / formPostRequest ด้านบน */
   function callServer(fnName) {
     var args = Array.prototype.slice.call(arguments, 1);
 
     if (GET_ACTION_NAME.hasOwnProperty(fnName)) {
       var keys = GET_ACTION_ARGS[fnName];
       var qs = 'action=' + GET_ACTION_NAME[fnName];
-      keys.forEach(function (k, i) { qs += '&' + k + '=' + encodeURIComponent(args[i] == null ? '' : args[i]); });
+      keys.forEach(function (k, i) {
+        var v = args[i];
+        if (v != null && typeof v === 'object') v = JSON.stringify(v);
+        qs += '&' + k + '=' + encodeURIComponent(v == null ? '' : v);
+      });
       return jsonpRequest(qs).then(function (result) {
         if (!result.ok) throw new Error(result.error || 'unknown error');
         return result.data;
