@@ -86,6 +86,10 @@
   .profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; margin-bottom: 10px; }
   .profile-row img { width: 28px; height: 28px; border-radius: 50%; }
   .role-section { display: none; }
+  .tab-nav { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab-nav button { flex: 1; margin: 0; background: #eee; color: #333; }
+  .tab-nav button.active { background: #1565c0; color: #fff; }
+  .success-msg { display: none; color: #2e7d32; font-size: 13px; margin-top: 8px; text-align: center; }
 </style>
 </head>
 <body>
@@ -103,36 +107,46 @@
 <div id="section-request" class="role-section">
   <h1>📋 ขอย้ายเครื่องจักร</h1>
 
-  <div class="card">
-    <label>เครื่องจักร/ทะเบียน</label>
-    <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
-    <datalist id="req-machineList"></datalist>
-
-    <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
-    <input id="req-origin" placeholder="เลือกเครื่องจักรก่อน">
-    <div style="font-size:11px;color:#e65100;margin:-6px 0 10px;">ระบบดึงตำแหน่งล่าสุดจากฐานข้อมูลอัตโนมัติ ถ้าไม่ตรงกับความจริง แก้ไขในช่องนี้ได้เลย ระบบจะแจ้งเสมียนให้ตรวจสอบ/แก้ไขข้อมูลเครื่องจักรให้ถูกต้องต่อไป (คนขับจะไปตามตำแหน่งที่กรอกในช่องนี้)</div>
-
-    <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
-    <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย (จะมีรหัสโครงการนำหน้าให้อัตโนมัติถ้าเลือกจากลิสต์)">
-    <datalist id="req-siteList"></datalist>
-
-    <label>วันที่ต้องการย้าย</label>
-    <input id="req-wantedDate" type="date">
-
-    <label>ความเร่งด่วน</label>
-    <div class="toggle-group">
-      <button type="button" id="req-btnNormal" class="active normal" onclick="reqSetUrgency(false)">ไม่ด่วน</button>
-      <button type="button" id="req-btnUrgent" onclick="reqSetUrgency(true)">🔴 ด่วน</button>
-    </div>
-
-    <label>หมายเหตุ</label>
-    <textarea id="req-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
-
-    <button onclick="reqSubmitForm()" id="req-submitBtn">ส่งคำขอ</button>
+  <div class="tab-nav">
+    <button type="button" id="req-tabBtn-form" class="active" onclick="reqShowTab('form')">ฟอร์มคำขอ</button>
+    <button type="button" id="req-tabBtn-mylist" onclick="reqShowTab('mylist')">คำขอของฉัน</button>
   </div>
 
-  <h2>คำขอของฉัน</h2>
-  <div id="req-myList"><div class="loading">กำลังโหลด...</div></div>
+  <div id="req-tab-form">
+    <div class="card">
+      <label>เครื่องจักร/ทะเบียน</label>
+      <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
+      <datalist id="req-machineList"></datalist>
+
+      <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
+      <input id="req-origin" placeholder="เลือกเครื่องจักรก่อน">
+      <div style="font-size:11px;color:#e65100;margin:-6px 0 10px;">ระบบดึงตำแหน่งล่าสุดจากฐานข้อมูลอัตโนมัติ ถ้าไม่ตรงกับความจริง แก้ไขในช่องนี้ได้เลย ระบบจะแจ้งเสมียนให้ตรวจสอบ/แก้ไขข้อมูลเครื่องจักรให้ถูกต้องต่อไป (คนขับจะไปตามตำแหน่งที่กรอกในช่องนี้)</div>
+
+      <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
+      <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย (จะมีรหัสโครงการนำหน้าให้อัตโนมัติถ้าเลือกจากลิสต์)">
+      <datalist id="req-siteList"></datalist>
+
+      <label>วันที่ต้องการย้าย</label>
+      <input id="req-wantedDate" type="date">
+
+      <label>ความเร่งด่วน</label>
+      <div class="toggle-group">
+        <button type="button" id="req-btnNormal" class="active normal" onclick="reqSetUrgency(false)">ไม่ด่วน</button>
+        <button type="button" id="req-btnUrgent" onclick="reqSetUrgency(true)">🔴 ด่วน</button>
+      </div>
+
+      <label>หมายเหตุ</label>
+      <textarea id="req-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
+
+      <button onclick="reqSubmitForm()" id="req-submitBtn">ส่งคำขอ</button>
+      <div id="req-successMsg" class="success-msg">✅ ส่งคำขอสำเร็จแล้ว</div>
+    </div>
+  </div>
+
+  <div id="req-tab-mylist" style="display:none;">
+    <h2>คำขอของฉัน</h2>
+    <div id="req-myList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <!-- ============ ผู้อนุมัติ ============ -->
@@ -473,6 +487,14 @@
     return (s.code ? s.code + ' - ' : '') + s.name;
   }
 
+  function reqShowTab(tab) {
+    document.getElementById('req-tab-form').style.display = tab === 'form' ? 'block' : 'none';
+    document.getElementById('req-tab-mylist').style.display = tab === 'mylist' ? 'block' : 'none';
+    document.getElementById('req-tabBtn-form').classList.toggle('active', tab === 'form');
+    document.getElementById('req-tabBtn-mylist').classList.toggle('active', tab === 'mylist');
+    if (tab === 'mylist') reqLoadMyList();
+  }
+
   function reqInit() {
     reqLoadMachines();
     reqLoadSites();
@@ -545,6 +567,10 @@
     callServer('submitRequest', CURRENT_USER.userId, payload)
       .then(function () {
         showToast('ส่งคำขอแล้ว');
+        var successEl = document.getElementById('req-successMsg');
+        successEl.style.display = 'block';
+        clearTimeout(window.__reqSuccessTimer);
+        window.__reqSuccessTimer = setTimeout(function () { successEl.style.display = 'none'; }, 4000);
         document.getElementById('req-destination').value = '';
         document.getElementById('req-note').value = '';
         reqLoadMyList();
