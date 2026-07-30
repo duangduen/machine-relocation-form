@@ -58,6 +58,36 @@
   }
 
   targets.forEach(function (t, i) { testOne(t, i); });
+
+  // ---------- ทดสอบเรียก Apps Script API จริง (เหมือนที่ index.html เรียกจริงทุกประการ) ----------
+  var API_URL = 'https://script.google.com/macros/s/AKfycbwBTyeA3r7bwqqPi-d9ONKI_aAGkElFLKqOkCP2dWLYog0wgfzSGlNuTd9px81KnEjY/exec';
+  var apiBox = document.createElement('div');
+  apiBox.innerHTML = '<h1 style="margin-top:24px;">🧪 ทดสอบเรียก API จริง (เหมือนแอปเรียกจริง)</h1>' +
+    '<div class="row"><div>GET ?action=machineList<br><span class="url">' + API_URL + '?action=machineList</span></div><span class="status pending" id="api0">รอ...</span></div>' +
+    '<pre id="api0detail" style="background:#fff;border-radius:8px;padding:10px;font-size:11px;white-space:pre-wrap;word-break:break-all;display:none;"></pre>';
+  document.body.insertBefore(apiBox, document.querySelector('.note'));
+
+  var apiBadge = document.getElementById('api0');
+  var apiDetail = document.getElementById('api0detail');
+  var apiController = new AbortController();
+  var apiTimer = setTimeout(function () { apiController.abort(); }, 8000);
+  fetch(API_URL + '?action=machineList', { signal: apiController.signal, cache: 'no-store' })
+    .then(function (res) {
+      clearTimeout(apiTimer);
+      return res.text().then(function (body) {
+        apiBadge.textContent = 'สถานะ ' + res.status;
+        apiBadge.className = 'status ' + (res.ok ? 'ok' : 'fail');
+        apiDetail.style.display = 'block';
+        apiDetail.textContent = 'HTTP status: ' + res.status + '\nresponse (300 อักษรแรก):\n' + body.slice(0, 300);
+      });
+    })
+    .catch(function (err) {
+      clearTimeout(apiTimer);
+      apiBadge.textContent = 'พัง';
+      apiBadge.className = 'status fail';
+      apiDetail.style.display = 'block';
+      apiDetail.textContent = 'err.name: ' + err.name + '\nerr.message: ' + err.message;
+    });
 </script>
 </body>
 </html>
