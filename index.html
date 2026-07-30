@@ -105,13 +105,15 @@
 
   <div class="card">
     <label>เครื่องจักร/ทะเบียน</label>
-    <select id="req-machineSelect"><option value="">-- เลือกเครื่องจักร --</option></select>
+    <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
+    <datalist id="req-machineList"></datalist>
 
     <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
-    <input id="req-origin" disabled placeholder="เลือกเครื่องจักรก่อน">
+    <input id="req-origin" placeholder="เลือกเครื่องจักรก่อน">
+    <div style="font-size:11px;color:#e65100;margin:-6px 0 10px;">ระบบดึงตำแหน่งล่าสุดจากฐานข้อมูลอัตโนมัติ ถ้าไม่ตรงกับความจริง แก้ไขในช่องนี้ได้เลย ระบบจะแจ้งเสมียนให้ตรวจสอบ/แก้ไขข้อมูลเครื่องจักรให้ถูกต้องต่อไป (คนขับจะไปตามตำแหน่งที่กรอกในช่องนี้)</div>
 
     <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
-    <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย">
+    <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย (จะมีรหัสโครงการนำหน้าให้อัตโนมัติถ้าเลือกจากลิสต์)">
     <datalist id="req-siteList"></datalist>
 
     <label>วันที่ต้องการย้าย</label>
@@ -438,7 +440,18 @@
 
   /* ============================= ช่างคุมงาน: ขอย้ายเครื่องจักร ============================= */
   var reqMachines = [];
+  var reqMachineByLabel = {}; // composite label (ที่โชว์ใน datalist) -> machine object เอาไว้จับคู่ตอนเลือก
+  var reqSites = [];
+  var reqSiteByLabel = {}; // composite label (รหัส - ชื่อ) -> site object
+  var reqSelectedMachine = null;
   var reqIsUrgent = false;
+
+  function reqMachineLabel_(m) {
+    return m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
+  }
+  function reqSiteLabel_(s) {
+    return (s.code ? s.code + ' - ' : '') + s.name;
+  }
 
   function reqInit() {
     reqLoadMachines();
@@ -449,26 +462,35 @@
   function reqLoadMachines() {
     callServer('getMachineList').then(function (list) {
       reqMachines = list;
-      var sel = document.getElementById('req-machineSelect');
+      reqMachineByLabel = {};
+      var dl = document.getElementById('req-machineList');
       list.forEach(function (m) {
+        var label = reqMachineLabel_(m);
+        reqMachineByLabel[label] = m;
         var opt = document.createElement('option');
-        opt.value = m.code;
-        opt.textContent = m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
-        sel.appendChild(opt);
+        opt.value = label;
+        dl.appendChild(opt);
       });
-      sel.onchange = function () {
-        var m = reqMachines.filter(function (x) { return x.code === sel.value; })[0];
+
+      var input = document.getElementById('req-machineInput');
+      input.addEventListener('input', function () {
+        var m = reqMachineByLabel[input.value];
+        reqSelectedMachine = m || null;
         document.getElementById('req-origin').value = m ? m.currentSite : '';
-      };
+      });
     });
   }
 
   function reqLoadSites() {
     callServer('getSiteList').then(function (list) {
+      reqSites = list;
+      reqSiteByLabel = {};
       var dl = document.getElementById('req-siteList');
       list.forEach(function (s) {
+        var label = reqSiteLabel_(s);
+        reqSiteByLabel[label] = s;
         var opt = document.createElement('option');
-        opt.value = s.name;
+        opt.value = label;
         dl.appendChild(opt);
       });
     });
@@ -481,14 +503,19 @@
   }
 
   function reqSubmitForm() {
-    var machineCode = document.getElementById('req-machineSelect').value;
-    var destination = document.getElementById('req-destination').value.trim();
-    if (!machineCode) return showToast('กรุณาเลือกเครื่องจักร');
-    if (!destination) return showToast('กรุณาระบุปลายทาง');
+    var destinationTyped = document.getElementById('req-destination').value.trim();
+    var originTyped = document.getElementById('req-origin').value.trim();
+    if (!reqSelectedMachine) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ (พิมพ์ค้นหาแล้วแตะเลือก)');
+    if (!destinationTyped) return showToast('กรุณาระบุปลายทาง');
+    if (!originTyped) return showToast('กรุณาระบุต้นทาง');
+
+    var matchedSite = reqSiteByLabel[destinationTyped];
 
     var payload = {
-      machineCode: machineCode,
-      destination: destination,
+      machineCode: reqSelectedMachine.code,
+      origin: originTyped,
+      destination: destinationTyped,
+      destinationName: matchedSite ? matchedSite.name : destinationTyped, // ชื่อล้วนไม่มีรหัสนำหน้า ใช้เช็คหน้างานซ้ำฝั่ง server
       wantedDate: document.getElementById('req-wantedDate').value,
       urgency: reqIsUrgent ? 'ด่วน' : 'ไม่ด่วน',
       note: document.getElementById('req-note').value
