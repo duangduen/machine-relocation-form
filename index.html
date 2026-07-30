@@ -573,6 +573,25 @@
   var reqEditingId = null; // null = โหมดส่งคำขอใหม่ / มีค่า = กำลังแก้ไขคำขอนี้อยู่
   var reqMyRequestsCache = {}; // Request ID -> row object เอาไว้ใช้ตอนกดแก้ไข (ไม่ต้องยิง API ซ้ำ)
 
+  /** Sheet เก็บ "วันที่ต้องการย้าย" เป็นเซลล์วันที่จริง พอส่งกลับมาเป็น JSON เลยกลายเป็น ISO string
+   *  (เช่น "2026-07-30T17:00:00.000Z") - แปลงให้อ่านง่ายเป็น dd/MM/yyyy ตอนแสดงผล */
+  function formatDateTH_(val) {
+    if (!val) return '-';
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
+  }
+
+  /** แปลงค่าเดียวกันให้เป็น yyyy-mm-dd สำหรับเติมกลับเข้า <input type="date"> ตอนกดแก้ไข */
+  function toDateInputValue_(val) {
+    if (!val) return '';
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
   function reqMachineLabel_(m) {
     return m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
   }
@@ -665,7 +684,7 @@
     document.getElementById('req-machineInput').value = machine ? reqMachineLabel_(machine) : r['เครื่องจักร/ทะเบียน'];
     document.getElementById('req-origin').value = r['ต้นทาง'] || '';
     document.getElementById('req-destination').value = r['ปลายทาง'] || '';
-    document.getElementById('req-wantedDate').value = r['วันที่ต้องการย้าย'] || '';
+    document.getElementById('req-wantedDate').value = toDateInputValue_(r['วันที่ต้องการย้าย']);
     document.getElementById('req-note').value = r['Comment/หมายเหตุ'] || '';
     reqSetUrgency(r['ความเร่งด่วน'] === 'ด่วน');
 
@@ -741,7 +760,7 @@
           (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-          '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + (r['วันที่ต้องการย้าย'] || '-') + '</span></div>' +
+          '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
           (isPending ?
             '<div class="card-actions">' +
@@ -770,7 +789,7 @@
       return '<div class="card' + urgentClass + '">' +
         (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
         '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-        '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + (r['วันที่ต้องการย้าย'] || '-') + '</span></div>' +
         (r['Comment/หมายเหตุ'] ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + r['Comment/หมายเหตุ'] + '</span></div>' : '') +
@@ -942,7 +961,7 @@
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-        '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ขอ</span><span>' + r['วันที่ขอ'] + '</span></div>' +
         '<input type="text" id="c2-pj-' + id + '" placeholder="กรอกเลข PJ">' +
         '<button onclick="c2Issue(\'' + id + '\', this)">บันทึกเลข PJ</button>' +
@@ -977,7 +996,7 @@
       return '<div class="card">' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + (hasPj ? ' (' + r['เลข PJ'] + ')' : '') + '</span>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-        '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
         '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
         (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '<div class="row"><span class="label">รูปหลักฐาน</span><span>ไม่มีแนบ</span></div>') +
