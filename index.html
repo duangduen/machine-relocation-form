@@ -183,21 +183,94 @@
 
   var CURRENT_USER = null;
 
-  // กันหน้าจอค้างตลอดกาลถ้าเน็ต/เว็บวิวค้างระหว่างรอผลลัพธ์ (pattern เดียวกับระบบดั้มพ่วง)
-  async function fetchWithTimeout(url, options) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
-    try {
-      return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
-    } finally {
-      clearTimeout(timer);
-    }
+  // ---------------------------------------------------------------------------------
+  // LINE iOS in-app browser (WebKit) ปฏิเสธการอ่าน response จาก fetch() แบบ cors-mode
+  // ไปยัง Apps Script แม้ domain จะเชื่อมต่อได้จริง (ยืนยันแล้วด้วย diag.html) - เข้าใจว่า
+  // เป็นข้อจำกัดเรื่อง CORS header บน redirect chain ของ Apps Script เอง
+  // -> เลี่ยงปัญหาโดยไม่ใช้ fetch() เรียก Apps Script เลย ใช้ 2 เทคนิคที่ไม่ติด CORS แทน:
+  //   อ่านข้อมูล (GET)  -> JSONP ผ่าน <script src="...&callback=xxx">
+  //   เขียนข้อมูล (POST) -> hidden <iframe> + <form target="ไอเฟรมนั้น"> แล้วรับผลลัพธ์กลับ
+  //                         ผ่าน postMessage (ฝั่ง Apps Script ต้อง return HTML ที่มี script
+  //                         เรียก postMessage กลับมา - ดู doPost ใน Code.gs)
+  // ---------------------------------------------------------------------------------
+
+  var __jsonpCounter = 0;
+  function jsonpRequest(qs) {
+    return new Promise(function (resolve, reject) {
+      var cbName = '__cb_' + (++__jsonpCounter) + '_' + Date.now();
+      var script = document.createElement('script');
+      var timer = setTimeout(function () {
+        cleanup();
+        reject(new Error('การเชื่อมต่อช้าเกินไป (รอเกิน 20 วิ) กรุณาลองใหม่อีกครั้ง'));
+      }, 20000);
+      function cleanup() {
+        clearTimeout(timer);
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+      }
+      window[cbName] = function (result) {
+        cleanup();
+        resolve(result);
+      };
+      script.onerror = function () {
+        cleanup();
+        reject(new Error('โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ (เครือข่ายอาจบล็อกอยู่)'));
+      };
+      script.src = APPS_SCRIPT_URL + '?' + qs + '&callback=' + cbName;
+      document.body.appendChild(script);
+    });
+  }
+
+  var __formCounter = 0;
+  function formPostRequest(fields) {
+    return new Promise(function (resolve, reject) {
+      var reqId = '__form_' + (++__formCounter) + '_' + Date.now();
+      var iframeName = reqId + '_frame';
+      var iframe = document.createElement('iframe');
+      iframe.name = iframeName;
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = APPS_SCRIPT_URL;
+      form.target = iframeName;
+      form.style.display = 'none';
+      var allFields = Object.assign({}, fields, { viaForm: '1' });
+      Object.keys(allFields).forEach(function (k) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = k;
+        input.value = allFields[k] == null ? '' : String(allFields[k]);
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+
+      var timer = setTimeout(function () {
+        cleanup();
+        reject(new Error('การเชื่อมต่อช้าเกินไป (รอเกิน 25 วิ) ระบบอาจบันทึกไปแล้วหรือยังก็ได้ กรุณาตรวจสอบก่อนลองใหม่'));
+      }, 25000);
+
+      function cleanup() {
+        clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        if (form.parentNode) form.parentNode.removeChild(form);
+        setTimeout(function () { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 500);
+      }
+
+      function onMessage(ev) {
+        // รับเฉพาะข้อความที่มาจาก iframe ที่เราสร้างเอง กันข้อความอื่นหลุดเข้ามาปนกัน
+        if (ev.source !== iframe.contentWindow) return;
+        cleanup();
+        resolve(ev.data);
+      }
+      window.addEventListener('message', onMessage);
+
+      form.submit();
+    });
   }
 
   function friendlyErrorMessage(err) {
-    if (err && err.name === 'AbortError') {
-      return 'การเชื่อมต่อช้าเกินไป (รอเกิน 20 วิ) ระบบอาจบันทึกไปแล้วหรือยังก็ได้ กรุณาลองใหม่อีกครั้ง อย่ากดซ้ำทันที';
-    }
     return err && err.message ? err.message : String(err);
   }
 
@@ -241,7 +314,9 @@
     markSiteReviewed: ['siteName', 'note']
   };
 
-  /** เรียก Apps Script Web App (JSON API) แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้ */
+  /** เรียก Apps Script Web App แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้
+   *  ข้างในเปลี่ยนจาก fetch() เป็น JSONP (อ่านข้อมูล) / hidden-iframe form (เขียนข้อมูล) เพื่อเลี่ยงปัญหา
+   *  CORS ใน LINE iOS in-app browser - ดูรายละเอียดที่ jsonpRequest / formPostRequest ด้านบน */
   function callServer(fnName) {
     var args = Array.prototype.slice.call(arguments, 1);
 
@@ -249,28 +324,24 @@
       var keys = GET_ACTION_ARGS[fnName];
       var qs = 'action=' + GET_ACTION_NAME[fnName];
       keys.forEach(function (k, i) { qs += '&' + k + '=' + encodeURIComponent(args[i] == null ? '' : args[i]); });
-      return fetchWithTimeout(APPS_SCRIPT_URL + '?' + qs)
-        .then(function (res) { return res.json(); })
-        .then(function (result) {
-          if (!result.ok) throw new Error(result.error || 'unknown error');
-          return result.data;
-        });
+      return jsonpRequest(qs).then(function (result) {
+        if (!result.ok) throw new Error(result.error || 'unknown error');
+        return result.data;
+      });
     }
 
     if (POST_ACTION_ARGS.hasOwnProperty(fnName)) {
       var keys2 = POST_ACTION_ARGS[fnName];
-      var body = { action: fnName };
-      keys2.forEach(function (k, i) { body[k] = args[i]; });
-      return fetchWithTimeout(APPS_SCRIPT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(body)
-      })
-        .then(function (res) { return res.json(); })
-        .then(function (result) {
-          if (!result.ok) throw new Error(result.error || 'unknown error');
-          return result.data;
-        });
+      var fields = { action: fnName };
+      keys2.forEach(function (k, i) {
+        var v = args[i];
+        if (v != null && typeof v === 'object') v = JSON.stringify(v);
+        fields[k] = v;
+      });
+      return formPostRequest(fields).then(function (result) {
+        if (!result.ok) throw new Error(result.error || 'unknown error');
+        return result.data;
+      });
     }
 
     return Promise.reject(new Error('ไม่รู้จักฟังก์ชัน: ' + fnName));
