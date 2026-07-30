@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบขอย้ายเครื่องจักร</title>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'Sarabun', sans-serif;
+    background: #f4f5f7;
+    margin: 0;
+    padding: 12px;
+    color: #222;
+  }
+  h1 { font-size: 18px; margin: 8px 0 12px; }
+  h2 { font-size: 15px; margin: 16px 0 8px; color: #555; }
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border-left: 4px solid #ccc;
+  }
+  .card.urgent { border-left-color: #e53935; }
+  .card .row { display: flex; justify-content: space-between; font-size: 13px; margin: 2px 0; }
+  .card .label { color: #888; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #eee;
+    color: #555;
+    margin-bottom: 6px;
+  }
+  .badge.urgent { background: #ffebee; color: #c62828; }
+  .badge.status-pending { background: #fff3e0; color: #ef6c00; }
+  .badge.status-approved { background: #e3f2fd; color: #1565c0; }
+  .badge.status-claimed { background: #ede7f6; color: #5e35b1; }
+  .badge.status-moved { background: #e8f5e9; color: #2e7d32; }
+  .badge.status-closed { background: #eeeeee; color: #616161; }
+  .badge.status-rejected { background: #ffebee; color: #c62828; }
+  button, .btn {
+    font-size: 14px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #1565c0;
+    color: #fff;
+    cursor: pointer;
+    margin-right: 6px;
+    margin-top: 6px;
+  }
+  button.secondary { background: #eee; color: #333; }
+  button.danger { background: #e53935; }
+  button.success { background: #2e7d32; }
+  button:disabled { opacity: 0.5; }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    margin-bottom: 10px;
+  }
+  label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+  .toggle-group { display: flex; gap: 8px; margin-bottom: 10px; }
+  .toggle-group button { flex: 1; margin: 0; background: #eee; color: #333; }
+  .toggle-group button.active { background: #e53935; color: #fff; }
+  .toggle-group button.active.normal { background: #1565c0; }
+  .empty { text-align: center; color: #999; padding: 30px 0; font-size: 13px; }
+  .toast {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; padding: 10px 18px; border-radius: 20px;
+    font-size: 13px; z-index: 999; max-width: 90%; text-align: center;
+  }
+  .loading { text-align: center; padding: 30px; color: #999; font-size: 13px; }
+  #loading-overlay {
+    position: fixed; inset: 0; background: #f4f5f7;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: #999; z-index: 1000;
+  }
+  .profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; margin-bottom: 10px; }
+  .profile-row img { width: 28px; height: 28px; border-radius: 50%; }
+  .role-section { display: none; }
+</style>
+</head>
+<body>
+
+<div id="loading-overlay"><span id="loading-overlay-text">กำลังตรวจสอบสิทธิ์ผู้ใช้งาน...</span></div>
+
+<h1>🚜 ระบบขอย้ายเครื่องจักร</h1>
+<div id="profile-bar"></div>
+
+<div id="not-registered" class="card" style="display:none;">
+  บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>กรุณาแจ้งเสมียน 1 เพื่อเพิ่มชื่อในระบบ
+</div>
+
+<!-- ============ ช่างคุมงาน: ขอย้ายเครื่องจักร ============ -->
+<div id="section-request" class="role-section">
+  <h1>📋 ขอย้ายเครื่องจักร</h1>
+
+  <div class="card">
+    <label>เครื่องจักร/ทะเบียน</label>
+    <select id="req-machineSelect"><option value="">-- เลือกเครื่องจักร --</option></select>
+
+    <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
+    <input id="req-origin" disabled placeholder="เลือกเครื่องจักรก่อน">
+
+    <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
+    <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย">
+    <datalist id="req-siteList"></datalist>
+
+    <label>วันที่ต้องการย้าย</label>
+    <input id="req-wantedDate" type="date">
+
+    <label>ความเร่งด่วน</label>
+    <div class="toggle-group">
+      <button type="button" id="req-btnNormal" class="active normal" onclick="reqSetUrgency(false)">ไม่ด่วน</button>
+      <button type="button" id="req-btnUrgent" onclick="reqSetUrgency(true)">🔴 ด่วน</button>
+    </div>
+
+    <label>หมายเหตุ</label>
+    <textarea id="req-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
+
+    <button onclick="reqSubmitForm()" id="req-submitBtn">ส่งคำขอ</button>
+  </div>
+
+  <h2>คำขอของฉัน</h2>
+  <div id="req-myList"><div class="loading">กำลังโหลด...</div></div>
+</div>
+
+<!-- ============ ผู้อนุมัติ ============ -->
+<div id="section-approve" class="role-section">
+  <h1>✅ รออนุมัติ</h1>
+  <div id="apr-list"><div class="loading">กำลังโหลด...</div></div>
+</div>
+
+<!-- ============ คนขับ ============ -->
+<div id="section-driver" class="role-section">
+  <h1>🚚 คิวงานย้ายเครื่องจักร</h1>
+
+  <h2>งานของฉัน (รับแล้ว ยังไม่เสร็จ)</h2>
+  <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
+
+  <h2>คิวเปิด (ยังไม่มีใครรับ)</h2>
+  <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
+</div>
+
+<!-- ============ เสมียน 1 ============ -->
+<div id="section-clerk1" class="role-section">
+  <h1>🗂 ภาพรวมคำขอทั้งหมด (เสมียน 1)</h1>
+
+  <h2>หน้างานใหม่ รอตรวจสอบ</h2>
+  <div id="c1-sites"><div class="loading">กำลังโหลด...</div></div>
+
+  <h2>คำขอย้ายเครื่องจักรทั้งหมด</h2>
+  <div id="c1-list"><div class="loading">กำลังโหลด...</div></div>
+</div>
+
+<!-- ============ เสมียน 2 ============ -->
+<div id="section-clerk2" class="role-section">
+  <h1>🔢 ออกเลข PJ (เสมียน 2)</h1>
+  <p style="font-size:12px;color:#888;">รายการนี้ไม่บล็อกคนขับ - คนขับย้ายไปแล้วก็ได้ ออกเลขตามทีหลังได้ เรียงเก่าสุดก่อน</p>
+  <div id="c2-list"><div class="loading">กำลังโหลด...</div></div>
+</div>
+
+<!-- ============ เสมียน 3 ============ -->
+<div id="section-clerk3" class="role-section">
+  <h1>🧾 ตรวจสอบ/ปิดงาน (เสมียน 3)</h1>
+  <p style="font-size:12px;color:#888;">ปิดงานได้เฉพาะรายการที่มีเลข PJ แล้วเท่านั้น</p>
+  <div id="c3-list"><div class="loading">กำลังโหลด...</div></div>
+</div>
+
+<script>
+  // ============ ตั้งค่าที่ต้องแก้ก่อนใช้งานจริง ============
+  const LIFF_ID = '2010592933-J3nNOO6d';
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBTyeA3r7bwqqPi-d9ONKI_aAGkElFLKqOkCP2dWLYog0wgfzSGlNuTd9px81KnEjY/exec'; // TODO: อัปเดตหลัง deploy เวอร์ชันใหม่ (JSON API)
+  // ==========================================================
+
+  var CURRENT_USER = null;
+
+  // กันหน้าจอค้างตลอดกาลถ้าเน็ต/เว็บวิวค้างระหว่างรอผลลัพธ์ (pattern เดียวกับระบบดั้มพ่วง)
+  async function fetchWithTimeout(url, options) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function friendlyErrorMessage(err) {
+    if (err && err.name === 'AbortError') {
+      return 'การเชื่อมต่อช้าเกินไป (รอเกิน 20 วิ) ระบบอาจบันทึกไปแล้วหรือยังก็ได้ กรุณาลองใหม่อีกครั้ง อย่ากดซ้ำทันที';
+    }
+    return err && err.message ? err.message : String(err);
+  }
+
+  // ตาราง mapping ชื่อฟังก์ชัน (เหมือน google.script.run เดิม) -> action ของ JSON API ฝั่ง Code.gs
+  var GET_ACTION_NAME = {
+    whoAmI: 'whoAmI',
+    getMachineList: 'machineList',
+    getSiteList: 'siteList',
+    listMyRequests: 'myRequests',
+    listPendingApprovals: 'pendingApprovals',
+    listOpenQueue: 'openQueue',
+    listMyClaimedJobs: 'myClaimedJobs',
+    listAllRequests: 'allRequests',
+    listSitesPendingReview: 'sitesPendingReview',
+    listPjBacklog: 'pjBacklog',
+    listPendingAudit: 'pendingAudit'
+  };
+  var GET_ACTION_ARGS = {
+    whoAmI: ['userId'],
+    getMachineList: [],
+    getSiteList: [],
+    listMyRequests: ['userId'],
+    listPendingApprovals: ['userId'],
+    listOpenQueue: ['userId'],
+    listMyClaimedJobs: ['userId'],
+    listAllRequests: ['userId'],
+    listSitesPendingReview: [],
+    listPjBacklog: ['userId'],
+    listPendingAudit: ['userId']
+  };
+  var POST_ACTION_ARGS = {
+    submitRequest: ['userId', 'payload'],
+    approveRequest: ['userId', 'requestId'],
+    rejectRequest: ['userId', 'requestId', 'reason'],
+    claimJob: ['userId', 'requestId'],
+    releaseJob: ['userId', 'requestId'],
+    markMoved: ['userId', 'requestId', 'actualDate', 'photo'],
+    editRequestFields: ['userId', 'requestId', 'patch'],
+    issuePjNumber: ['userId', 'requestId', 'pjNumber'],
+    closeJob: ['userId', 'requestId'],
+    markSiteReviewed: ['siteName', 'note']
+  };
+
+  /** เรียก Apps Script Web App (JSON API) แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้ */
+  function callServer(fnName) {
+    var args = Array.prototype.slice.call(arguments, 1);
+
+    if (GET_ACTION_NAME.hasOwnProperty(fnName)) {
+      var keys = GET_ACTION_ARGS[fnName];
+      var qs = 'action=' + GET_ACTION_NAME[fnName];
+      keys.forEach(function (k, i) { qs += '&' + k + '=' + encodeURIComponent(args[i] == null ? '' : args[i]); });
+      return fetchWithTimeout(APPS_SCRIPT_URL + '?' + qs)
+        .then(function (res) { return res.json(); })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.error || 'unknown error');
+          return result.data;
+        });
+    }
+
+    if (POST_ACTION_ARGS.hasOwnProperty(fnName)) {
+      var keys2 = POST_ACTION_ARGS[fnName];
+      var body = { action: fnName };
+      keys2.forEach(function (k, i) { body[k] = args[i]; });
+      return fetchWithTimeout(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body)
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (result) {
+          if (!result.ok) throw new Error(result.error || 'unknown error');
+          return result.data;
+        });
+    }
+
+    return Promise.reject(new Error('ไม่รู้จักฟังก์ชัน: ' + fnName));
+  }
+
+  function showToast(msg) {
+    var el = document.getElementById('toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'toast';
+      el.className = 'toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = friendlyErrorMessage(msg);
+    el.style.display = 'block';
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(function () { el.style.display = 'none'; }, 3000);
+  }
+
+  function statusBadgeClass(status) {
+    var map = {
+      'รออนุมัติ': 'status-pending',
+      'อนุมัติแล้ว รอคนขับรับงาน': 'status-approved',
+      'มีคนขับรับงานแล้ว': 'status-claimed',
+      'ย้ายเสร็จแล้ว': 'status-moved',
+      'ปิดงาน': 'status-closed',
+      'ไม่อนุมัติ': 'status-rejected'
+    };
+    return 'badge ' + (map[status] || '');
+  }
+
+  function hideLoadingOverlay() {
+    var el = document.getElementById('loading-overlay');
+    if (el) el.style.display = 'none';
+  }
+
+  var ROLE_SECTION = {
+    'ช่างคุมงาน': 'section-request',
+    'ผู้อนุมัติ': 'section-approve',
+    'คนขับ': 'section-driver',
+    'เสมียน1': 'section-clerk1',
+    'เสมียน2': 'section-clerk2',
+    'เสมียน3': 'section-clerk3'
+  };
+
+  async function initApp() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) { liff.login(); return; }
+      var profile = await liff.getProfile();
+      CURRENT_USER = profile;
+      document.getElementById('profile-bar').innerHTML =
+        '<div class="profile-row"><img src="' + (profile.pictureUrl || '') + '" onerror="this.style.display=\'none\'">' +
+        '<span>เข้าสู่ระบบเป็น: <strong>' + profile.displayName + '</strong></span></div>';
+
+      var info = await callServer('whoAmI', profile.userId);
+      hideLoadingOverlay();
+      if (!info.registered) {
+        document.getElementById('not-registered').style.display = 'block';
+        return;
+      }
+      showRoleSection(info.role);
+    } catch (err) {
+      hideLoadingOverlay();
+      document.getElementById('profile-bar').innerHTML =
+        '<span style="color:#d64545">โหลดโปรไฟล์ LINE ไม่สำเร็จ (เปิดนอกแอป LINE หรือยังไม่ได้ตั้งค่า LIFF_ID): ' + friendlyErrorMessage(err) + '</span>';
+    }
+  }
+
+  function showRoleSection(role) {
+    var id = ROLE_SECTION[role];
+    if (!id) return;
+    document.getElementById(id).style.display = 'block';
+    if (id === 'section-request') { reqInit(); }
+    if (id === 'section-approve') { aprInit(); }
+    if (id === 'section-driver') { drvInit(); }
+    if (id === 'section-clerk1') { c1Init(); }
+    if (id === 'section-clerk2') { c2Init(); }
+    if (id === 'section-clerk3') { c3Init(); }
+  }
+
+  /* ============================= ช่างคุมงาน: ขอย้ายเครื่องจักร ============================= */
+  var reqMachines = [];
+  var reqIsUrgent = false;
+
+  function reqInit() {
+    reqLoadMachines();
+    reqLoadSites();
+    reqLoadMyList();
+  }
+
+  function reqLoadMachines() {
+    callServer('getMachineList').then(function (list) {
+      reqMachines = list;
+      var sel = document.getElementById('req-machineSelect');
+      list.forEach(function (m) {
+        var opt = document.createElement('option');
+        opt.value = m.code;
+        opt.textContent = m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
+        sel.appendChild(opt);
+      });
+      sel.onchange = function () {
+        var m = reqMachines.filter(function (x) { return x.code === sel.value; })[0];
+        document.getElementById('req-origin').value = m ? m.currentSite : '';
+      };
+    });
+  }
+
+  function reqLoadSites() {
+    callServer('getSiteList').then(function (list) {
+      var dl = document.getElementById('req-siteList');
+      list.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = s.name;
+        dl.appendChild(opt);
+      });
+    });
+  }
+
+  function reqSetUrgency(urgent) {
+    reqIsUrgent = urgent;
+    document.getElementById('req-btnNormal').classList.toggle('active', !urgent);
+    document.getElementById('req-btnUrgent').classList.toggle('active', urgent);
+  }
+
+  function reqSubmitForm() {
+    var machineCode = document.getElementById('req-machineSelect').value;
+    var destination = document.getElementById('req-destination').value.trim();
+    if (!machineCode) return showToast('กรุณาเลือกเครื่องจักร');
+    if (!destination) return showToast('กรุณาระบุปลายทาง');
+
+    var payload = {
+      machineCode: machineCode,
+      destination: destination,
+      wantedDate: document.getElementById('req-wantedDate').value,
+      urgency: reqIsUrgent ? 'ด่วน' : 'ไม่ด่วน',
+      note: document.getElementById('req-note').value
+    };
+
+    document.getElementById('req-submitBtn').disabled = true;
+    callServer('submitRequest', CURRENT_USER.userId, payload)
+      .then(function () {
+        showToast('ส่งคำขอแล้ว');
+        document.getElementById('req-destination').value = '';
+        document.getElementById('req-note').value = '';
+        reqLoadMyList();
+      })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); })
+      .finally(function () { document.getElementById('req-submitBtn').disabled = false; });
+  }
+
+  function reqLoadMyList() {
+    callServer('listMyRequests', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('req-myList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีคำขอ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+        return '<div class="card' + urgentClass + '">' +
+          '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
+          (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  /* ============================= ผู้อนุมัติ ============================= */
+  function aprInit() { aprLoad(); }
+
+  function aprLoad() {
+    callServer('listPendingApprovals', CURRENT_USER.userId).then(aprRender)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function aprRender(rows) {
+    var el = document.getElementById('apr-list');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีคำขอรออนุมัติ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+      var id = r['Request ID'];
+      return '<div class="card' + urgentClass + '">' +
+        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
+        '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+        '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + (r['วันที่ต้องการย้าย'] || '-') + '</span></div>' +
+        (r['Comment/หมายเหตุ'] ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + r['Comment/หมายเหตุ'] + '</span></div>' : '') +
+        '<div>' +
+        '<button class="success" onclick="aprApprove(\'' + id + '\', this)">อนุมัติ</button>' +
+        '<button class="danger" onclick="aprRejectPrompt(\'' + id + '\', this)">ไม่อนุมัติ</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  function aprApprove(id, btn) {
+    btn.disabled = true;
+    callServer('approveRequest', CURRENT_USER.userId, id)
+      .then(function () { showToast('อนุมัติแล้ว'); aprLoad(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  function aprRejectPrompt(id, btn) {
+    var reason = prompt('เหตุผลที่ไม่อนุมัติ:');
+    if (reason === null) return;
+    btn.disabled = true;
+    callServer('rejectRequest', CURRENT_USER.userId, id, reason)
+      .then(function () { showToast('บันทึกผลไม่อนุมัติแล้ว'); aprLoad(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  /* ============================= คนขับ ============================= */
+  function drvInit() { drvLoadAll(); }
+  function drvLoadAll() { drvLoadMyJobs(); drvLoadOpenQueue(); }
+
+  function drvLoadMyJobs() {
+    callServer('listMyClaimedJobs', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('drv-myJobs');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีงานที่รับไว้</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var id = r['Request ID'];
+        return '<div class="card">' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<div>' +
+          '<button class="success" onclick="drvOpenMovedForm(\'' + id + '\')">✅ ย้ายเสร็จแล้ว</button>' +
+          '<button class="secondary" onclick="drvRelease(\'' + id + '\', this)">คืนงานเข้าคิว</button>' +
+          '</div>' +
+          '<div id="drv-form-' + id + '"></div>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  function drvLoadOpenQueue() {
+    callServer('listOpenQueue', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('drv-openQueue');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานในคิว</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+        var id = r['Request ID'];
+        return '<div class="card' + urgentClass + '">' +
+          (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  function drvClaim(id, btn) {
+    btn.disabled = true;
+    callServer('claimJob', CURRENT_USER.userId, id)
+      .then(function () { showToast('รับงานแล้ว'); drvLoadAll(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  function drvRelease(id, btn) {
+    btn.disabled = true;
+    callServer('releaseJob', CURRENT_USER.userId, id)
+      .then(function () { showToast('คืนงานเข้าคิวแล้ว'); drvLoadAll(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  function drvOpenMovedForm(id) {
+    var box = document.getElementById('drv-form-' + id);
+    box.innerHTML =
+      '<label>วันที่ย้ายจริง</label>' +
+      '<input type="date" id="drv-date-' + id + '">' +
+      '<label>รูปหลักฐาน (ถ้ามี)</label>' +
+      '<input type="file" accept="image/*" capture="environment" id="drv-photo-' + id + '">' +
+      '<button class="success" onclick="drvSubmitMoved(\'' + id + '\')">ยืนยันย้ายเสร็จ</button>';
+  }
+
+  function drvSubmitMoved(id) {
+    var dateVal = document.getElementById('drv-date-' + id).value;
+    var fileInput = document.getElementById('drv-photo-' + id);
+    var file = fileInput.files[0];
+
+    if (!file) { drvDoSubmitMoved(id, dateVal, null); return; }
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      var base64 = reader.result.split(',')[1];
+      drvDoSubmitMoved(id, dateVal, { base64: base64, mimeType: file.type, filename: file.name });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function drvDoSubmitMoved(id, dateVal, photo) {
+    showToast('กำลังบันทึก...');
+    callServer('markMoved', CURRENT_USER.userId, id, dateVal, photo)
+      .then(function () { showToast('บันทึกย้ายเสร็จแล้ว'); drvLoadAll(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  /* ============================= เสมียน 1 ============================= */
+  function c1Init() { c1LoadSites(); c1LoadList(); }
+
+  function c1LoadSites() {
+    callServer('listSitesPendingReview').then(function (rows) {
+      var el = document.getElementById('c1-sites');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีหน้างานใหม่ค้างตรวจสอบ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var name = r['ชื่อหน้างาน'];
+        return '<div class="card">' +
+          '<div class="row"><span class="label">ชื่อหน้างาน</span><span>' + name + '</span></div>' +
+          '<div class="row"><span class="label">เพิ่มโดย</span><span>' + r['เพิ่มโดย'] + ' (' + r['วันที่เพิ่ม'] + ')</span></div>' +
+          '<button onclick="c1MarkReviewed(\'' + name.replace(/'/g, "\\'") + '\', this)">ทำเครื่องหมายว่าตรวจสอบแล้ว</button>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  function c1MarkReviewed(name, btn) {
+    btn.disabled = true;
+    callServer('markSiteReviewed', name, 'ตรวจสอบแล้ว')
+      .then(function () { showToast('อัปเดตแล้ว'); c1LoadSites(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  function c1LoadList() {
+    callServer('listAllRequests', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('c1-list');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีคำขอ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+        return '<div class="card' + urgentClass + '">' +
+          '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
+          '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
+          '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  /* ============================= เสมียน 2 ============================= */
+  function c2Init() { c2Load(); }
+
+  function c2Load() {
+    callServer('listPjBacklog', CURRENT_USER.userId).then(c2Render)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function c2Render(rows) {
+    var el = document.getElementById('c2-list');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานค้างออกเลข PJ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      var id = r['Request ID'];
+      return '<div class="card">' +
+        '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ขอ</span><span>' + r['วันที่ขอ'] + '</span></div>' +
+        '<input type="text" id="c2-pj-' + id + '" placeholder="กรอกเลข PJ">' +
+        '<button onclick="c2Issue(\'' + id + '\', this)">บันทึกเลข PJ</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function c2Issue(id, btn) {
+    var pj = document.getElementById('c2-pj-' + id).value.trim();
+    if (!pj) return showToast('กรุณากรอกเลข PJ');
+    btn.disabled = true;
+    callServer('issuePjNumber', CURRENT_USER.userId, id, pj)
+      .then(function () { showToast('บันทึกแล้ว'); c2Load(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  /* ============================= เสมียน 3 ============================= */
+  function c3Init() { c3Load(); }
+
+  function c3Load() {
+    callServer('listPendingAudit', CURRENT_USER.userId).then(c3Render)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function c3Render(rows) {
+    var el = document.getElementById('c3-list');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานรอตรวจสอบ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      var id = r['Request ID'];
+      var hasPj = r['สถานะเอกสาร PJ (แกน B)'] === 'ออกเลขแล้ว';
+      var photo = r['รูปหลักฐานการย้าย'];
+      return '<div class="card">' +
+        '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + (hasPj ? ' (' + r['เลข PJ'] + ')' : '') + '</span>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+        '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
+        (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '<div class="row"><span class="label">รูปหลักฐาน</span><span>ไม่มีแนบ</span></div>') +
+        '<button class="success" ' + (hasPj ? '' : 'disabled') + ' onclick="c3Close(\'' + id + '\', this)">' +
+        (hasPj ? 'บันทึกค่าเที่ยว / ปิดงาน' : 'รอเลข PJ ก่อน') + '</button>' +
+        '</div>';
+    }).join('');
+  }
+
+  function c3Close(id, btn) {
+    btn.disabled = true;
+    callServer('closeJob', CURRENT_USER.userId, id)
+      .then(function () { showToast('ปิดงานแล้ว'); c3Load(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  initApp();
+</script>
+</body>
+</html>
