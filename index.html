@@ -181,6 +181,8 @@
   <div id="profile-bar"></div>
 </div>
 
+<div id="role-switcher" class="tab-nav" style="display:none;"></div>
+
 <div id="not-registered" class="card" style="display:none;">
   บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>กรุณาแจ้งเสมียน 1 เพื่อเพิ่มชื่อในระบบ
 </div>
@@ -513,6 +515,14 @@
     'เสมียน2': 'section-clerk2',
     'เสมียน3': 'section-clerk3'
   };
+  var ROLE_LABEL = {
+    'ช่างคุมงาน': '📋 ขอย้ายเครื่องจักร',
+    'ผู้อนุมัติ': '✅ อนุมัติ',
+    'คนขับ': '🚚 คิวงาน',
+    'เสมียน1': '🗂 ภาพรวม',
+    'เสมียน2': '🔢 ออกเลข PJ',
+    'เสมียน3': '🧾 ตรวจสอบ/ปิดงาน'
+  };
 
   async function initApp() {
     var stage = 'liff.init';
@@ -532,11 +542,12 @@
       stage = 'whoAmI (backend API)';
       var info = await callServer('whoAmI', profile.userId);
       hideLoadingOverlay();
-      if (!info.registered) {
+      if (!info.registered || !info.roles || !info.roles.length) {
         document.getElementById('not-registered').style.display = 'block';
         return;
       }
-      showRoleSection(info.role);
+      showRoleSwitcher(info.roles);
+      showRoleSection(info.roles[0]);
     } catch (err) {
       hideLoadingOverlay();
       var diag = 'ขั้นตอนที่พัง: ' + stage + '<br>' +
@@ -549,6 +560,29 @@
       document.getElementById('profile-bar').innerHTML =
         '<div style="color:#d64545;font-size:12px;text-align:left;background:#fff;border-radius:8px;padding:10px;line-height:1.6;">' + diag + '</div>';
     }
+  }
+
+  /** ถ้า user มีมากกว่า 1 บทบาท โชว์แถบสลับเมนูด้านบน (ใช้สไตล์เดียวกับ .tab-nav) */
+  function showRoleSwitcher(roles) {
+    var bar = document.getElementById('role-switcher');
+    if (roles.length <= 1) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = roles.map(function (r, i) {
+      return '<button type="button" class="' + (i === 0 ? 'active' : '') + '" onclick="switchRole(\'' + r + '\', this)">' +
+        (ROLE_LABEL[r] || r) + '</button>';
+    }).join('');
+  }
+
+  function switchRole(role, btn) {
+    Object.keys(ROLE_SECTION).forEach(function (r) {
+      var id = ROLE_SECTION[r];
+      if (id) document.getElementById(id).style.display = 'none';
+    });
+    Array.prototype.forEach.call(btn.parentNode.querySelectorAll('button'), function (b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    showRoleSection(role);
   }
 
   function showRoleSection(role) {
@@ -792,7 +826,7 @@
         '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
-        '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + (r['วันที่ต้องการย้าย'] || '-') + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
         (r['Comment/หมายเหตุ'] ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + r['Comment/หมายเหตุ'] + '</span></div>' : '') +
         '<div>' +
         '<button class="success" onclick="aprApprove(\'' + id + '\', this)">อนุมัติ</button>' +
