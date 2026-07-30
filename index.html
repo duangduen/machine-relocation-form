@@ -148,12 +148,14 @@
   .profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.9); margin: 6px 0 0; }
   .profile-row img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); }
   .role-section { display: none; }
-  .tab-nav { display: flex; gap: 8px; margin-bottom: 14px; background: #eef0f2; padding: 4px; border-radius: 10px; }
+  .tab-nav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 2px solid var(--border); }
   .tab-nav button {
-    flex: 1; margin: 0; padding: 9px 12px;
-    background: transparent; color: #556; box-shadow: none;
+    flex: 1; margin: 0 0 -2px; padding: 10px 8px;
+    background: transparent; color: var(--muted); box-shadow: none;
+    border-radius: 6px 6px 0 0; border-bottom: 2px solid transparent;
   }
-  .tab-nav button.active { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .tab-nav button:hover { filter: none; background: #f0f2f5; }
+  .tab-nav button.active { background: transparent; color: var(--primary); border-bottom-color: var(--primary); }
   .success-msg {
     display: none; color: var(--accent-dark); background: #e8f5e9;
     font-size: 13px; font-weight: 600; padding: 8px 10px; border-radius: 8px;
