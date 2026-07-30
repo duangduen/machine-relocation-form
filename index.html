@@ -317,15 +317,21 @@
   };
 
   async function initApp() {
+    var stage = 'liff.init';
     try {
       await liff.init({ liffId: LIFF_ID });
+
+      stage = 'liff.login';
       if (!liff.isLoggedIn()) { liff.login(); return; }
+
+      stage = 'liff.getProfile';
       var profile = await liff.getProfile();
       CURRENT_USER = profile;
       document.getElementById('profile-bar').innerHTML =
         '<div class="profile-row"><img src="' + (profile.pictureUrl || '') + '" onerror="this.style.display=\'none\'">' +
         '<span>เข้าสู่ระบบเป็น: <strong>' + profile.displayName + '</strong></span></div>';
 
+      stage = 'whoAmI (backend API)';
       var info = await callServer('whoAmI', profile.userId);
       hideLoadingOverlay();
       if (!info.registered) {
@@ -335,8 +341,15 @@
       showRoleSection(info.role);
     } catch (err) {
       hideLoadingOverlay();
+      var diag = 'ขั้นตอนที่พัง: ' + stage + '<br>' +
+        'err.name: ' + (err && err.name) + '<br>' +
+        'err.message: ' + friendlyErrorMessage(err) + '<br>' +
+        'isInClient: ' + (window.liff && liff.isInClient ? liff.isInClient() : 'n/a') + '<br>' +
+        'OS: ' + (window.liff && liff.getOS ? liff.getOS() : 'n/a') + '<br>' +
+        'LINE version: ' + (window.liff && liff.getLineVersion ? liff.getLineVersion() : 'n/a') + '<br>' +
+        'href: ' + location.href;
       document.getElementById('profile-bar').innerHTML =
-        '<span style="color:#d64545">โหลดโปรไฟล์ LINE ไม่สำเร็จ (เปิดนอกแอป LINE หรือยังไม่ได้ตั้งค่า LIFF_ID): ' + friendlyErrorMessage(err) + '</span>';
+        '<div style="color:#d64545;font-size:12px;text-align:left;background:#fff;border-radius:8px;padding:10px;line-height:1.6;">' + diag + '</div>';
     }
   }
 

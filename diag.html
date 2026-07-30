@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ทดสอบเครือข่าย - ระบบขอย้ายเครื่องจักร</title>
+<style>
+  body { font-family: 'Segoe UI', 'Sarabun', sans-serif; background: #f4f5f7; margin: 0; padding: 16px; color: #222; }
+  h1 { font-size: 16px; }
+  .row { background: #fff; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .status { font-weight: bold; padding: 2px 10px; border-radius: 999px; font-size: 12px; }
+  .pending { background: #eee; color: #666; }
+  .ok { background: #e8f5e9; color: #2e7d32; }
+  .fail { background: #ffebee; color: #c62828; }
+  .note { font-size: 12px; color: #888; margin-top: 16px; line-height: 1.6; }
+  .url { color: #888; font-size: 11px; }
+</style>
+</head>
+<body>
+<h1>🔎 ทดสอบว่าเครือข่ายนี้เข้าถึงบริการที่ระบบต้องใช้ได้ไหม</h1>
+<div id="results"></div>
+<div class="note">
+  กด "โหลด" แล้วรอ 2-3 วินาที ถ้าอันไหนขึ้น "บล็อก/เข้าไม่ถึง" แปลว่าเครือข่ายนี้ (WiFi/มือถือ) กันการเชื่อมต่อไปยังโดเมนนั้น
+  ลองสลับเป็นเน็ตมือถือ (4G/5G ปิด WiFi) แล้วโหลดหน้านี้ใหม่เพื่อเทียบผลดู<br><br>
+  ถ่ายภาพหน้าจอนี้ส่งกลับมาได้เลย
+</div>
+<script>
+  var targets = [
+    { name: 'LIFF SDK (static.line-scdn.net)', url: 'https://static.line-scdn.net/liff/edge/2/sdk.js' },
+    { name: 'LINE API (api.line.me)', url: 'https://api.line.me/' },
+    { name: 'LINE Login (access.line.me)', url: 'https://access.line.me/' },
+    { name: 'Apps Script backend (script.google.com)', url: 'https://script.google.com/' },
+    { name: 'Apps Script content (script.googleusercontent.com)', url: 'https://script.googleusercontent.com/' },
+    { name: 'GitHub Pages เอง (duangduen.github.io)', url: 'https://duangduen.github.io/' }
+  ];
+
+  var el = document.getElementById('results');
+  el.innerHTML = targets.map(function (t, i) {
+    return '<div class="row"><div>' + t.name + '<br><span class="url">' + t.url + '</span></div><span class="status pending" id="s' + i + '">รอ...</span></div>';
+  }).join('');
+
+  function testOne(t, i) {
+    var badge = document.getElementById('s' + i);
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 6000);
+    fetch(t.url, { mode: 'no-cors', signal: controller.signal, cache: 'no-store' })
+      .then(function () {
+        clearTimeout(timer);
+        badge.textContent = 'เข้าถึงได้';
+        badge.className = 'status ok';
+      })
+      .catch(function (err) {
+        clearTimeout(timer);
+        badge.textContent = 'บล็อก/เข้าไม่ถึง';
+        badge.className = 'status fail';
+        badge.title = err && err.message;
+      });
+  }
+
+  targets.forEach(function (t, i) { testOne(t, i); });
+</script>
+</body>
+</html>
