@@ -6,35 +6,83 @@
 <title>ระบบขอย้ายเครื่องจักร</title>
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
+  :root {
+    --primary: #1565c0;
+    --primary-dark: #0d47a1;
+    --accent: #2e7d32;
+    --accent-dark: #1b5e20;
+    --danger: #e53935;
+    --ink: #1c2126;
+    --muted: #6b7280;
+    --border: #e3e6ea;
+    --bg: #f4f6f9;
+    --card-bg: #ffffff;
+  }
   * { box-sizing: border-box; }
   body {
     font-family: 'Segoe UI', 'Sarabun', sans-serif;
-    background: #f4f5f7;
+    background: var(--bg);
     margin: 0;
-    padding: 12px;
-    color: #222;
+    padding: 0 12px 24px;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
   }
-  h1 { font-size: 18px; margin: 8px 0 12px; }
-  h2 { font-size: 15px; margin: 16px 0 8px; color: #555; }
+  .app-header {
+    margin: 0 -12px 14px;
+    padding: 16px 16px 14px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(13,71,161,0.25);
+  }
+  .app-header h1 {
+    font-size: 17px;
+    margin: 0;
+    font-weight: 600;
+    letter-spacing: .2px;
+  }
+  h1 { font-size: 18px; margin: 8px 0 12px; font-weight: 600; }
+  h2 {
+    font-size: 13px;
+    margin: 18px 0 8px;
+    color: var(--muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+  }
   .card {
-    background: #fff;
-    border-radius: 10px;
-    padding: 12px 14px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 14px 16px;
     margin-bottom: 10px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    border-left: 4px solid #ccc;
+    box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 6px rgba(16,24,40,0.06);
+    border: 1px solid var(--border);
+    border-left: 4px solid #cfd4da;
   }
-  .card.urgent { border-left-color: #e53935; }
-  .card .row { display: flex; justify-content: space-between; font-size: 13px; margin: 2px 0; }
-  .card .label { color: #888; }
+  .card.urgent { border-left-color: var(--danger); }
+  .card .row { display: flex; justify-content: space-between; font-size: 13px; margin: 3px 0; }
+  .card .label { color: var(--muted); }
+  .route { margin: 8px 0 6px; padding: 8px 10px; background: #f7f8fa; border-radius: 8px; }
+  .route-line { display: flex; align-items: baseline; gap: 8px; font-size: 13px; padding: 2px 0; }
+  .route-label {
+    flex: 0 0 32px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    color: #90a4ae;
+  }
+  .route-line.to .route-label { color: var(--primary); }
+  .route-value { color: var(--ink); line-height: 1.4; }
   .badge {
     display: inline-block;
     font-size: 11px;
-    padding: 2px 8px;
+    font-weight: 600;
+    padding: 3px 10px;
     border-radius: 999px;
     background: #eee;
     color: #555;
     margin-bottom: 6px;
+    margin-right: 4px;
   }
   .badge.urgent { background: #ffebee; color: #c62828; }
   .badge.status-pending { background: #fff3e0; color: #ef6c00; }
@@ -45,59 +93,82 @@
   .badge.status-rejected { background: #ffebee; color: #c62828; }
   button, .btn {
     font-size: 14px;
-    padding: 10px 16px;
+    font-weight: 600;
+    padding: 11px 16px;
     border: none;
     border-radius: 8px;
-    background: #1565c0;
+    background: var(--primary);
     color: #fff;
     cursor: pointer;
     margin-right: 6px;
     margin-top: 6px;
+    transition: filter .15s ease, transform .05s ease;
   }
-  button.secondary { background: #eee; color: #333; }
-  button.danger { background: #e53935; }
-  button.success { background: #2e7d32; }
-  button:disabled { opacity: 0.5; }
+  button:hover { filter: brightness(1.06); }
+  button:active { transform: translateY(1px); }
+  button.secondary { background: #eef0f2; color: #333; }
+  button.danger { background: var(--danger); }
+  button.success { background: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
   input, select, textarea {
     width: 100%;
-    padding: 10px;
+    padding: 10px 12px;
     font-size: 14px;
-    border: 1px solid #ccc;
+    font-family: inherit;
+    border: 1px solid #d3d7dc;
     border-radius: 8px;
     margin-bottom: 10px;
+    background: #fff;
+    color: var(--ink);
+    transition: border-color .15s ease, box-shadow .15s ease;
   }
-  label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(21,101,192,0.12);
+  }
+  label { font-size: 13px; color: #444; font-weight: 600; display: block; margin-bottom: 4px; }
   .toggle-group { display: flex; gap: 8px; margin-bottom: 10px; }
-  .toggle-group button { flex: 1; margin: 0; background: #eee; color: #333; }
-  .toggle-group button.active { background: #e53935; color: #fff; }
-  .toggle-group button.active.normal { background: #1565c0; }
+  .toggle-group button { flex: 1; margin: 0; background: #eef0f2; color: #333; }
+  .toggle-group button.active { background: var(--danger); color: #fff; }
+  .toggle-group button.active.normal { background: var(--primary); }
   .empty { text-align: center; color: #999; padding: 30px 0; font-size: 13px; }
   .toast {
     position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-    background: #333; color: #fff; padding: 10px 18px; border-radius: 20px;
+    background: #262b30; color: #fff; padding: 10px 18px; border-radius: 20px;
     font-size: 13px; z-index: 999; max-width: 90%; text-align: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
   }
   .loading { text-align: center; padding: 30px; color: #999; font-size: 13px; }
   #loading-overlay {
-    position: fixed; inset: 0; background: #f4f5f7;
+    position: fixed; inset: 0; background: var(--bg);
     display: flex; align-items: center; justify-content: center;
     font-size: 13px; color: #999; z-index: 1000;
   }
-  .profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #555; margin-bottom: 10px; }
-  .profile-row img { width: 28px; height: 28px; border-radius: 50%; }
+  .profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.9); margin: 6px 0 0; }
+  .profile-row img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); }
   .role-section { display: none; }
-  .tab-nav { display: flex; gap: 8px; margin-bottom: 12px; }
-  .tab-nav button { flex: 1; margin: 0; background: #eee; color: #333; }
-  .tab-nav button.active { background: #1565c0; color: #fff; }
-  .success-msg { display: none; color: #2e7d32; font-size: 13px; margin-top: 8px; text-align: center; }
+  .tab-nav { display: flex; gap: 8px; margin-bottom: 14px; background: #eef0f2; padding: 4px; border-radius: 10px; }
+  .tab-nav button {
+    flex: 1; margin: 0; padding: 9px 12px;
+    background: transparent; color: #556; box-shadow: none;
+  }
+  .tab-nav button.active { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+  .success-msg {
+    display: none; color: var(--accent-dark); background: #e8f5e9;
+    font-size: 13px; font-weight: 600; padding: 8px 10px; border-radius: 8px;
+    margin-top: 10px; text-align: center;
+  }
 </style>
 </head>
 <body>
 
 <div id="loading-overlay"><span id="loading-overlay-text">กำลังตรวจสอบสิทธิ์ผู้ใช้งาน...</span></div>
 
-<h1>🚜 ระบบขอย้ายเครื่องจักร</h1>
-<div id="profile-bar"></div>
+<div class="app-header">
+  <h1>🚜 ระบบขอย้ายเครื่องจักร</h1>
+  <div id="profile-bar"></div>
+</div>
 
 <div id="not-registered" class="card" style="display:none;">
   บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>กรุณาแจ้งเสมียน 1 เพื่อเพิ่มชื่อในระบบ
@@ -589,7 +660,7 @@
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
           '</div>';
       }).join('');
@@ -652,7 +723,7 @@
         var id = r['Request ID'];
         return '<div class="card">' +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div>' +
           '<button class="success" onclick="drvOpenMovedForm(\'' + id + '\')">✅ ย้ายเสร็จแล้ว</button>' +
           '<button class="secondary" onclick="drvRelease(\'' + id + '\', this)">คืนงานเข้าคิว</button>' +
@@ -673,7 +744,7 @@
         return '<div class="card' + urgentClass + '">' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
           '</div>';
       }).join('');
@@ -761,7 +832,7 @@
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
           '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
-          '<div class="row"><span class="label">จาก → ไป</span><span>' + r['ต้นทาง'] + ' → ' + r['ปลายทาง'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
           '</div>';
