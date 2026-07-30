@@ -91,6 +91,15 @@
   .badge.status-moved { background: #e8f5e9; color: #2e7d32; }
   .badge.status-closed { background: #eeeeee; color: #616161; }
   .badge.status-rejected { background: #ffebee; color: #c62828; }
+  .badge.status-cancelled { background: #eeeeee; color: #757575; }
+  .card-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .card-actions button { flex: 1; margin: 0; padding: 8px 10px; font-size: 13px; }
+  .edit-banner {
+    background: #fff8e1; color: #8d6e00; border: 1px solid #ffe082;
+    border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600;
+    margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .edit-banner a { color: var(--primary); font-weight: 600; text-decoration: none; margin-left: auto; }
   button, .btn {
     font-size: 14px;
     font-weight: 600;
@@ -186,6 +195,10 @@
   </div>
 
   <div id="req-tab-form">
+    <div id="req-editBanner" class="edit-banner" style="display:none;">
+      ✏️ กำลังแก้ไขคำขอ <span id="req-editBannerId"></span>
+      <a href="#" onclick="reqCancelEditMode();return false;">ยกเลิกแก้ไข</a>
+    </div>
     <div class="card">
       <label>เครื่องจักร/ทะเบียน</label>
       <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
@@ -212,7 +225,7 @@
       <textarea id="req-note" rows="2" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea>
 
       <button onclick="reqSubmitForm()" id="req-submitBtn">ส่งคำขอ</button>
-      <div id="req-successMsg" class="success-msg">✅ ส่งคำขอสำเร็จแล้ว</div>
+      <div id="req-successMsg" class="success-msg"></div>
     </div>
   </div>
 
@@ -381,6 +394,8 @@
     // ขีดจำกัดความยาว URL จึงส่งผ่าน query string ได้สบาย ยกเว้น markMoved ที่มีรูปแนบ (base64)
     // อาจยาวเกิน ยังคงใช้ formPostRequest (ดูด้านล่าง) ต่อไป
     submitRequest: 'submitRequest',
+    cancelRequest: 'cancelRequest',
+    editMyRequest: 'editMyRequest',
     approveRequest: 'approveRequest',
     rejectRequest: 'rejectRequest',
     claimJob: 'claimJob',
@@ -403,6 +418,8 @@
     listPjBacklog: ['userId'],
     listPendingAudit: ['userId'],
     submitRequest: ['userId', 'payload'],
+    cancelRequest: ['userId', 'requestId'],
+    editMyRequest: ['userId', 'requestId', 'patch'],
     approveRequest: ['userId', 'requestId'],
     rejectRequest: ['userId', 'requestId', 'reason'],
     claimJob: ['userId', 'requestId'],
@@ -477,7 +494,8 @@
       'มีคนขับรับงานแล้ว': 'status-claimed',
       'ย้ายเสร็จแล้ว': 'status-moved',
       'ปิดงาน': 'status-closed',
-      'ไม่อนุมัติ': 'status-rejected'
+      'ไม่อนุมัติ': 'status-rejected',
+      'ยกเลิกคำขอ': 'status-cancelled'
     };
     return 'badge ' + (map[status] || '');
   }
@@ -552,6 +570,8 @@
   var reqSiteByLabel = {}; // composite label (รหัส - ชื่อ) -> site object
   var reqSelectedMachine = null;
   var reqIsUrgent = false;
+  var reqEditingId = null; // null = โหมดส่งคำขอใหม่ / มีค่า = กำลังแก้ไขคำขอนี้อยู่
+  var reqMyRequestsCache = {}; // Request ID -> row object เอาไว้ใช้ตอนกดแก้ไข (ไม่ต้องยิง API ซ้ำ)
 
   function reqMachineLabel_(m) {
     return m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
@@ -617,6 +637,52 @@
     document.getElementById('req-btnUrgent').classList.toggle('active', urgent);
   }
 
+  function reqResetForm() {
+    document.getElementById('req-machineInput').value = '';
+    document.getElementById('req-origin').value = '';
+    document.getElementById('req-destination').value = '';
+    document.getElementById('req-wantedDate').value = '';
+    document.getElementById('req-note').value = '';
+    reqSelectedMachine = null;
+    reqSetUrgency(false);
+  }
+
+  function reqCancelEditMode() {
+    reqEditingId = null;
+    document.getElementById('req-editBanner').style.display = 'none';
+    document.getElementById('req-submitBtn').textContent = 'ส่งคำขอ';
+    reqResetForm();
+  }
+
+  /** โหลดฟอร์มด้วยข้อมูลคำขอเดิม แล้วสลับไปแท็บฟอร์มเพื่อแก้ไข (แก้ได้เฉพาะตอนยังรออนุมัติ) */
+  function reqEditRequest(id) {
+    var r = reqMyRequestsCache[id];
+    if (!r) return;
+    reqEditingId = id;
+
+    var machine = reqMachines.filter(function (m) { return m.code === r['เครื่องจักร/ทะเบียน']; })[0];
+    reqSelectedMachine = machine || { code: r['เครื่องจักร/ทะเบียน'] };
+    document.getElementById('req-machineInput').value = machine ? reqMachineLabel_(machine) : r['เครื่องจักร/ทะเบียน'];
+    document.getElementById('req-origin').value = r['ต้นทาง'] || '';
+    document.getElementById('req-destination').value = r['ปลายทาง'] || '';
+    document.getElementById('req-wantedDate').value = r['วันที่ต้องการย้าย'] || '';
+    document.getElementById('req-note').value = r['Comment/หมายเหตุ'] || '';
+    reqSetUrgency(r['ความเร่งด่วน'] === 'ด่วน');
+
+    document.getElementById('req-editBannerId').textContent = '#' + id;
+    document.getElementById('req-editBanner').style.display = 'flex';
+    document.getElementById('req-submitBtn').textContent = 'บันทึกการแก้ไข';
+    reqShowTab('form');
+  }
+
+  function reqCancelRequest(id, btn) {
+    if (!confirm('ยืนยันยกเลิกคำขอ #' + id + ' ?')) return;
+    btn.disabled = true;
+    callServer('cancelRequest', CURRENT_USER.userId, id)
+      .then(function () { showToast('ยกเลิกคำขอแล้ว'); reqLoadMyList(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
   function reqSubmitForm() {
     var destinationTyped = document.getElementById('req-destination').value.trim();
     var originTyped = document.getElementById('req-origin').value.trim();
@@ -636,16 +702,24 @@
       note: document.getElementById('req-note').value
     };
 
+    var isEdit = !!reqEditingId;
     document.getElementById('req-submitBtn').disabled = true;
-    callServer('submitRequest', CURRENT_USER.userId, payload)
+    var call = isEdit
+      ? callServer('editMyRequest', CURRENT_USER.userId, reqEditingId, payload)
+      : callServer('submitRequest', CURRENT_USER.userId, payload);
+
+    call
       .then(function () {
-        showToast('ส่งคำขอแล้ว');
+        showToast(isEdit ? 'บันทึกการแก้ไขแล้ว' : 'ส่งคำขอแล้ว');
         var successEl = document.getElementById('req-successMsg');
+        successEl.textContent = isEdit ? '✅ บันทึกการแก้ไขแล้ว' : '✅ ส่งคำขอสำเร็จแล้ว';
         successEl.style.display = 'block';
         clearTimeout(window.__reqSuccessTimer);
         window.__reqSuccessTimer = setTimeout(function () { successEl.style.display = 'none'; }, 4000);
-        document.getElementById('req-destination').value = '';
-        document.getElementById('req-note').value = '';
+        reqEditingId = null;
+        document.getElementById('req-editBanner').style.display = 'none';
+        document.getElementById('req-submitBtn').textContent = 'ส่งคำขอ';
+        reqResetForm();
         reqLoadMyList();
       })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); })
@@ -655,15 +729,25 @@
   function reqLoadMyList() {
     callServer('listMyRequests', CURRENT_USER.userId).then(function (rows) {
       var el = document.getElementById('req-myList');
+      reqMyRequestsCache = {};
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีคำขอ</div>'; return; }
       el.innerHTML = rows.map(function (r) {
+        var id = r['Request ID'];
+        reqMyRequestsCache[id] = r;
         var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+        var isPending = r['สถานะการย้าย (แกน A)'] === 'รออนุมัติ';
         return '<div class="card' + urgentClass + '">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + (r['วันที่ต้องการย้าย'] || '-') + '</span></div>' +
           (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
+          (isPending ?
+            '<div class="card-actions">' +
+            '<button class="secondary" onclick="reqEditRequest(\'' + id + '\')">แก้ไข</button>' +
+            '<button class="danger" onclick="reqCancelRequest(\'' + id + '\', this)">ยกเลิกคำขอ</button>' +
+            '</div>' : '') +
           '</div>';
       }).join('');
     });
