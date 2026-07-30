@@ -212,8 +212,8 @@
       <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย (จะมีรหัสโครงการนำหน้าให้อัตโนมัติถ้าเลือกจากลิสต์)">
       <datalist id="req-siteList"></datalist>
 
-      <label>วันที่ต้องการย้าย</label>
-      <input id="req-wantedDate" type="date">
+      <label>วันที่ต้องการย้าย *</label>
+      <input id="req-wantedDate" type="date" required>
 
       <label>ความเร่งด่วน</label>
       <div class="toggle-group">
@@ -705,9 +705,11 @@
   function reqSubmitForm() {
     var destinationTyped = document.getElementById('req-destination').value.trim();
     var originTyped = document.getElementById('req-origin').value.trim();
+    var wantedDateTyped = document.getElementById('req-wantedDate').value;
     if (!reqSelectedMachine) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ (พิมพ์ค้นหาแล้วแตะเลือก)');
     if (!destinationTyped) return showToast('กรุณาระบุปลายทาง');
     if (!originTyped) return showToast('กรุณาระบุต้นทาง');
+    if (!wantedDateTyped) return showToast('กรุณาระบุวันที่ต้องการย้าย');
 
     var matchedSite = reqSiteByLabel[destinationTyped];
 
@@ -729,7 +731,6 @@
 
     call
       .then(function () {
-        showToast(isEdit ? 'บันทึกการแก้ไขแล้ว' : 'ส่งคำขอแล้ว');
         var successEl = document.getElementById('req-successMsg');
         successEl.textContent = isEdit ? '✅ บันทึกการแก้ไขแล้ว' : '✅ ส่งคำขอสำเร็จแล้ว';
         successEl.style.display = 'block';
