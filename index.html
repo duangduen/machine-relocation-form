@@ -607,10 +607,15 @@
   var reqEditingId = null; // null = โหมดส่งคำขอใหม่ / มีค่า = กำลังแก้ไขคำขอนี้อยู่
   var reqMyRequestsCache = {}; // Request ID -> row object เอาไว้ใช้ตอนกดแก้ไข (ไม่ต้องยิง API ซ้ำ)
 
-  /** Sheet เก็บ "วันที่ต้องการย้าย" เป็นเซลล์วันที่จริง พอส่งกลับมาเป็น JSON เลยกลายเป็น ISO string
-   *  (เช่น "2026-07-30T17:00:00.000Z") - แปลงให้อ่านง่ายเป็น dd/MM/yyyy ตอนแสดงผล */
+  /** Sheet เก็บวันที่บางคอลัมน์เป็นเซลล์วันที่จริง พอส่งกลับมาเป็น JSON เลยกลายเป็น ISO string
+   *  (เช่น "2026-07-30T17:00:00.000Z") - แปลงให้อ่านง่ายเป็น dd/MM/yyyy ตอนแสดงผล
+   *  บางคอลัมน์ (เช่น "วันที่ขนย้ายจริง") บางครั้งถูกเขียนเป็นข้อความ dd/MM/yyyy ไว้แล้ว (เช่นตอนคนขับไม่กรอก
+   *  วันที่ ระบบ fallback ไปใช้ todayStr_() ฝั่ง Apps Script) ถ้าเอาไปเข้า new Date() ซ้ำจะตีความผิดเป็น
+   *  MM/DD/YYYY ทำให้วันที่เพี้ยน จึงต้องเช็คก่อนว่าเป็น dd/MM/yyyy อยู่แล้วหรือยัง ถ้าใช่ให้คืนค่าเดิมไปเลย */
   function formatDateTH_(val) {
     if (!val) return '-';
+    var already = String(val).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (already) return String(val);
     var d = new Date(val);
     if (isNaN(d.getTime())) return String(val);
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -885,6 +890,7 @@
           (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
           '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
           '</div>';
       }).join('');
@@ -1033,7 +1039,7 @@
         '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
-        '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
         (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '<div class="row"><span class="label">รูปหลักฐาน</span><span>ไม่มีแนบ</span></div>') +
         '<button class="success" ' + (hasPj ? '' : 'disabled') + ' onclick="c3Close(\'' + id + '\', this)">' +
         (hasPj ? 'บันทึกค่าเที่ยว / ปิดงาน' : 'รอเลข PJ ก่อน') + '</button>' +
