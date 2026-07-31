@@ -232,51 +232,103 @@
   </div>
 
   <div id="req-tab-mylist" style="display:none;">
-    <h2>คำขอของฉัน</h2>
     <div id="req-myList"><div class="loading">กำลังโหลด...</div></div>
   </div>
 </div>
 
 <!-- ============ ผู้อนุมัติ ============ -->
 <div id="section-approve" class="role-section">
-  <h1>✅ รออนุมัติ</h1>
-  <div id="apr-list"><div class="loading">กำลังโหลด...</div></div>
+  <h1>✅ อนุมัติ</h1>
+
+  <div class="tab-nav">
+    <button type="button" id="apr-tabBtn-active" class="active" onclick="aprShowTab('active')">รออนุมัติ</button>
+    <button type="button" id="apr-tabBtn-history" onclick="aprShowTab('history')">ประวัติ</button>
+  </div>
+
+  <div id="apr-tab-active">
+    <div id="apr-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="apr-tab-history" style="display:none;">
+    <div id="apr-historyList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <!-- ============ คนขับ ============ -->
 <div id="section-driver" class="role-section">
   <h1>🚚 คิวงานย้ายเครื่องจักร</h1>
 
-  <h2>งานของฉัน (รับแล้ว ยังไม่เสร็จ)</h2>
-  <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
+  <div class="tab-nav">
+    <button type="button" id="drv-tabBtn-active" class="active" onclick="drvShowTab('active')">คิวงาน</button>
+    <button type="button" id="drv-tabBtn-history" onclick="drvShowTab('history')">ประวัติ</button>
+  </div>
 
-  <h2>คิวเปิด (ยังไม่มีใครรับ)</h2>
-  <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
+  <div id="drv-tab-active">
+    <h2>งานของฉัน (รับแล้ว ยังไม่เสร็จ)</h2>
+    <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
+
+    <h2>คิวเปิด (ยังไม่มีใครรับ)</h2>
+    <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="drv-tab-history" style="display:none;">
+    <div id="drv-historyList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <!-- ============ เสมียน 1 ============ -->
 <div id="section-clerk1" class="role-section">
-  <h1>🗂 ภาพรวมคำขอทั้งหมด (เสมียน 1)</h1>
+  <h1>🗂 ภาพรวม (เสมียน 1)</h1>
 
-  <h2>หน้างานใหม่ รอตรวจสอบ</h2>
-  <div id="c1-sites"><div class="loading">กำลังโหลด...</div></div>
+  <div class="tab-nav">
+    <button type="button" id="c1-tabBtn-active" class="active" onclick="c1ShowTab('active')">ภาพรวม</button>
+    <button type="button" id="c1-tabBtn-history" onclick="c1ShowTab('history')">ประวัติ</button>
+  </div>
 
-  <h2>คำขอย้ายเครื่องจักรทั้งหมด</h2>
-  <div id="c1-list"><div class="loading">กำลังโหลด...</div></div>
+  <div id="c1-tab-active">
+    <h2>หน้างานใหม่ รอตรวจสอบ</h2>
+    <div id="c1-sites"><div class="loading">กำลังโหลด...</div></div>
+
+    <h2>คำขอย้ายเครื่องจักรที่กำลังดำเนินการ</h2>
+    <div id="c1-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c1-tab-history" style="display:none;">
+    <div id="c1-historyList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <!-- ============ เสมียน 2 ============ -->
 <div id="section-clerk2" class="role-section">
   <h1>🔢 ออกเลข PJ (เสมียน 2)</h1>
-  <p style="font-size:12px;color:#888;">รายการนี้ไม่บล็อกคนขับ - คนขับย้ายไปแล้วก็ได้ ออกเลขตามทีหลังได้ เรียงเก่าสุดก่อน</p>
-  <div id="c2-list"><div class="loading">กำลังโหลด...</div></div>
+
+  <div class="tab-nav">
+    <button type="button" id="c2-tabBtn-active" class="active" onclick="c2ShowTab('active')">ออกเลข PJ</button>
+    <button type="button" id="c2-tabBtn-history" onclick="c2ShowTab('history')">ประวัติ</button>
+  </div>
+
+  <div id="c2-tab-active">
+    <p style="font-size:12px;color:#888;">รายการนี้ไม่บล็อกคนขับ - คนขับย้ายไปแล้วก็ได้ ออกเลขตามทีหลังได้ เรียงเก่าสุดก่อน</p>
+    <div id="c2-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c2-tab-history" style="display:none;">
+    <div id="c2-historyList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <!-- ============ เสมียน 3 ============ -->
 <div id="section-clerk3" class="role-section">
   <h1>🧾 ตรวจสอบ/ปิดงาน (เสมียน 3)</h1>
-  <p style="font-size:12px;color:#888;">ปิดงานได้เฉพาะรายการที่มีเลข PJ แล้วเท่านั้น</p>
-  <div id="c3-list"><div class="loading">กำลังโหลด...</div></div>
+
+  <div class="tab-nav">
+    <button type="button" id="c3-tabBtn-active" class="active" onclick="c3ShowTab('active')">ตรวจสอบ/ปิดงาน</button>
+    <button type="button" id="c3-tabBtn-history" onclick="c3ShowTab('history')">ประวัติ</button>
+  </div>
+
+  <div id="c3-tab-active">
+    <p style="font-size:12px;color:#888;">ปิดงานได้เฉพาะรายการที่มีเลข PJ แล้วเท่านั้น</p>
+    <div id="c3-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c3-tab-history" style="display:none;">
+    <div id="c3-historyList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <script>
@@ -391,6 +443,12 @@
     listSitesPendingReview: 'sitesPendingReview',
     listPjBacklog: 'pjBacklog',
     listPendingAudit: 'pendingAudit',
+    // ---- ประวัติย้อนหลัง (แยก action ต่างหากจากคิวงานปัจจุบัน ไม่ต้องโหลดทุกครั้ง) ----
+    listApprovalHistory: 'approvalHistory',
+    listDriverHistory: 'driverHistory',
+    listRequestHistory: 'requestHistory',
+    listPjHistory: 'pjHistory',
+    listClosedJobs: 'closedJobs',
     // ---- เขียนข้อมูล: ย้ายมาใช้ JSONP/GET ด้วย เพราะ hidden-iframe-form POST ยังค้างอยู่แม้แก้
     // X-Frame-Options แล้ว (สาเหตุที่แน่ชัดยังไม่เจอ) - payload พวกนี้เป็น text สั้นๆ ไม่เกิน
     // ขีดจำกัดความยาว URL จึงส่งผ่าน query string ได้สบาย ยกเว้น markMoved ที่มีรูปแนบ (base64)
@@ -419,6 +477,11 @@
     listSitesPendingReview: [],
     listPjBacklog: ['userId'],
     listPendingAudit: ['userId'],
+    listApprovalHistory: ['userId'],
+    listDriverHistory: ['userId'],
+    listRequestHistory: ['userId'],
+    listPjHistory: ['userId'],
+    listClosedJobs: ['userId'],
     submitRequest: ['userId', 'payload'],
     cancelRequest: ['userId', 'requestId'],
     editMyRequest: ['userId', 'requestId', 'patch'],
@@ -856,6 +919,35 @@
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
+  function aprShowTab(tab) {
+    document.getElementById('apr-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('apr-tab-history').style.display = tab === 'history' ? 'block' : 'none';
+    document.getElementById('apr-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('apr-tabBtn-history').classList.toggle('active', tab === 'history');
+    if (tab === 'active') aprLoad(); else aprLoadHistory();
+  }
+
+  function aprLoadHistory() {
+    callServer('listApprovalHistory', CURRENT_USER.userId).then(aprRenderHistory)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function aprRenderHistory(rows) {
+    var el = document.getElementById('apr-historyList');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+      return '<div class="card' + urgentClass + '">' +
+        '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+        '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
+        '<div class="row"><span class="label">ผู้อนุมัติ</span><span>' + (r['ผู้อนุมัติ + เวลา'] || '-') + '</span></div>' +
+        (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
   /* ============================= คนขับ ============================= */
   function drvInit() { drvLoadAll(); }
   function drvLoadAll() { drvLoadMyJobs(); drvLoadOpenQueue(); }
@@ -943,6 +1035,29 @@
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
+  function drvShowTab(tab) {
+    document.getElementById('drv-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('drv-tab-history').style.display = tab === 'history' ? 'block' : 'none';
+    document.getElementById('drv-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('drv-tabBtn-history').classList.toggle('active', tab === 'history');
+    if (tab === 'active') drvLoadAll(); else drvLoadHistory();
+  }
+
+  function drvLoadHistory() {
+    callServer('listDriverHistory', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('drv-historyList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        return '<div class="card">' +
+          '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
+          '</div>';
+      }).join('');
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
   /* ============================= เสมียน 1 ============================= */
   function c1Init() { c1LoadSites(); c1LoadList(); }
 
@@ -986,6 +1101,34 @@
     });
   }
 
+  function c1ShowTab(tab) {
+    document.getElementById('c1-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c1-tab-history').style.display = tab === 'history' ? 'block' : 'none';
+    document.getElementById('c1-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c1-tabBtn-history').classList.toggle('active', tab === 'history');
+    if (tab === 'active') c1LoadList(); else c1LoadHistory();
+  }
+
+  function c1LoadHistory() {
+    callServer('listRequestHistory', CURRENT_USER.userId).then(c1RenderHistory)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function c1RenderHistory(rows) {
+    var el = document.getElementById('c1-historyList');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      return '<div class="card">' +
+        '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
+        '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+        '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
+        '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+        '</div>';
+    }).join('');
+  }
+
   /* ============================= เสมียน 2 ============================= */
   function c2Init() { c2Load(); }
 
@@ -1017,6 +1160,29 @@
     callServer('issuePjNumber', CURRENT_USER.userId, id, pj)
       .then(function () { showToast('บันทึกแล้ว'); c2Load(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  function c2ShowTab(tab) {
+    document.getElementById('c2-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c2-tab-history').style.display = tab === 'history' ? 'block' : 'none';
+    document.getElementById('c2-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c2-tabBtn-history').classList.toggle('active', tab === 'history');
+    if (tab === 'active') c2Load(); else c2LoadHistory();
+  }
+
+  function c2LoadHistory() {
+    callServer('listPjHistory', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('c2-historyList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        return '<div class="card">' +
+          '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          '<div class="row"><span class="label">ออกเลขโดย</span><span>' + (r['ผู้ออกเลข PJ + เวลา'] || '-') + '</span></div>' +
+          '</div>';
+      }).join('');
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   /* ============================= เสมียน 3 ============================= */
@@ -1052,6 +1218,33 @@
     callServer('closeJob', CURRENT_USER.userId, id)
       .then(function () { showToast('ปิดงานแล้ว'); c3Load(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  function c3ShowTab(tab) {
+    document.getElementById('c3-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c3-tab-history').style.display = tab === 'history' ? 'block' : 'none';
+    document.getElementById('c3-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c3-tabBtn-history').classList.toggle('active', tab === 'history');
+    if (tab === 'active') c3Load(); else c3LoadHistory();
+  }
+
+  function c3LoadHistory() {
+    callServer('listClosedJobs', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('c3-historyList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var photo = r['รูปหลักฐานการย้าย'];
+        return '<div class="card">' +
+          '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span>' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
+          '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
+          '<div class="row"><span class="label">ปิดงานโดย</span><span>' + (r['เสมียน 3 ตรวจสอบแล้ว + เวลา'] || '-') + '</span></div>' +
+          (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '') +
+          '</div>';
+      }).join('');
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   initApp();
