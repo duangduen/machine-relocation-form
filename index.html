@@ -744,13 +744,24 @@
    *  บางคอลัมน์ (เช่น "วันที่ขนย้ายจริง") บางครั้งถูกเขียนเป็นข้อความ dd/MM/yyyy ไว้แล้ว (เช่นตอนคนขับไม่กรอก
    *  วันที่ ระบบ fallback ไปใช้ todayStr_() ฝั่ง Apps Script) ถ้าเอาไปเข้า new Date() ซ้ำจะตีความผิดเป็น
    *  MM/DD/YYYY ทำให้วันที่เพี้ยน จึงต้องเช็คก่อนว่าเป็น dd/MM/yyyy อยู่แล้วหรือยัง ถ้าใช่ให้คืนค่าเดิมไปเลย */
+  /**
+   * แปลงค่าวันที่ (อาจมีเวลาติดมาด้วย) ให้แสดงผลแบบไทย dd/MM/yyyy (+ HH:mm ถ้ามี)
+   * แยกแยะรูปแบบ dd/MM/yyyy [HH:mm] เองด้วย regex ตรงๆ ห้ามพึ่ง `new Date("31/07/2026")` เด็ดขาด เพราะ
+   * เบราว์เซอร์ตีความสตริงแบบ slash เป็น MM/DD/YYYY (สลับวัน-เดือน) ทำให้วันที่/เวลาที่โชว์ผิดเพี้ยนไป
+   * (เจอเคสจริง: หลังแก้ไขวันที่ย้ายเสร็จ วันที่/เวลาที่แสดงในหน้าประวัติผิดไปจากที่บันทึกจริง)
+   */
   function formatDateTH_(val) {
     if (!val) return '-';
-    var already = String(val).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (already) return String(val);
-    var d = new Date(val);
-    if (isNaN(d.getTime())) return String(val);
+    var s = String(val).trim();
+    var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/);
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    if (m) {
+      var out = pad(parseInt(m[1], 10)) + '/' + pad(parseInt(m[2], 10)) + '/' + m[3];
+      if (m[4] !== undefined) out += ' ' + pad(parseInt(m[4], 10)) + ':' + m[5];
+      return out;
+    }
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return s;
     return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
   }
 
@@ -1257,11 +1268,21 @@
     reader.readAsDataURL(file);
   }
 
-  /** ไม่ส่งวันที่จากฟอร์มแล้ว - เซิร์ฟเวอร์ใช้เวลาปัจจุบันของตัวเองเสมอ (ดู spec ข้อ 3.1 / markMoved ใน Requests.gs) */
+  /**
+   * ไม่ส่งวันที่จากฟอร์มแล้ว - เซิร์ฟเวอร์ใช้เวลาปัจจุบันของตัวเองเสมอ (ดู spec ข้อ 3.1 / markMoved ใน Requests.gs)
+   * ลบการ์ดของงานนี้ออกจากหน้าจอทันทีหลังบันทึกสำเร็จ (ไม่รอ drvLoadAll() โหลดเสร็จ) กันปัญหาการ์ดค้าง
+   * ไม่หายไปจนกว่าจะสลับแท็บแล้วกลับมาใหม่ - ยังเรียก drvLoadAll() ต่อท้ายเพื่อรีเฟรชคิวเปิด/รายการให้ตรงจริง
+   */
   function drvDoSubmitMoved(id, photo) {
     showToast('กำลังบันทึก...');
     callServer('markMoved', CURRENT_USER.userId, id, '', photo)
-      .then(function () { showToast('บันทึกย้ายเสร็จแล้ว'); drvLoadAll(); })
+      .then(function () {
+        showToast('บันทึกย้ายเสร็จแล้ว');
+        var formBox = document.getElementById('drv-form-' + id);
+        var card = formBox && formBox.closest('.card');
+        if (card) card.remove();
+        drvLoadAll();
+      })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
