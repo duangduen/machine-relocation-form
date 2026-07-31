@@ -195,6 +195,7 @@
   <div class="tab-nav">
     <button type="button" id="req-tabBtn-form" class="active" onclick="reqShowTab('form')">ฟอร์มคำขอ</button>
     <button type="button" id="req-tabBtn-mylist" onclick="reqShowTab('mylist')">คำขอของฉัน</button>
+    <button type="button" id="req-tabBtn-pause" onclick="reqShowTab('pause')">แจ้งหยุดใช้งาน</button>
   </div>
 
   <div id="req-tab-form">
@@ -235,6 +236,26 @@
   <div id="req-tab-mylist" style="display:none;">
     <div id="req-myList"><div class="loading">กำลังโหลด...</div></div>
   </div>
+
+  <div id="req-tab-pause" style="display:none;">
+    <div class="card">
+      <label>เครื่องจักร/ทะเบียน</label>
+      <input id="pau-machineInput" list="pau-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
+      <datalist id="pau-machineList"></datalist>
+
+      <label>วันที่เริ่มหยุด</label>
+      <input id="pau-startDate" type="date">
+
+      <label>เหตุผล</label>
+      <textarea id="pau-reason" rows="2" placeholder="เช่น หน้างานไม่พร้อม"></textarea>
+
+      <button onclick="pauSubmit()" id="pau-submitBtn">ส่งคำขอหยุดใช้งาน</button>
+      <div id="pau-successMsg" class="success-msg"></div>
+    </div>
+
+    <h2>รายการที่เคยแจ้งไว้</h2>
+    <div id="pau-myList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
 </div>
 
 <!-- ============ ผู้อนุมัติ ============ -->
@@ -243,11 +264,19 @@
 
   <div class="tab-nav">
     <button type="button" id="apr-tabBtn-active" class="active" onclick="aprShowTab('active')">รออนุมัติ</button>
+    <button type="button" id="apr-tabBtn-pause" onclick="aprShowTab('pause')">คำขอหยุดใช้งาน</button>
+    <button type="button" id="apr-tabBtn-report" onclick="aprShowTab('report')">รายงานค่าเช่า</button>
     <button type="button" id="apr-tabBtn-history" onclick="aprShowTab('history')">ประวัติ</button>
   </div>
 
   <div id="apr-tab-active">
     <div id="apr-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="apr-tab-pause" style="display:none;">
+    <div id="apr-pauseList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="apr-tab-report" style="display:none;">
+    <div id="apr-reportList"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="apr-tab-history" style="display:none;">
     <div id="apr-historyList"><div class="loading">กำลังโหลด...</div></div>
@@ -281,6 +310,7 @@
 
   <div class="tab-nav">
     <button type="button" id="c1-tabBtn-active" class="active" onclick="c1ShowTab('active')">ภาพรวม</button>
+    <button type="button" id="c1-tabBtn-report" onclick="c1ShowTab('report')">รายงานค่าเช่า</button>
     <button type="button" id="c1-tabBtn-history" onclick="c1ShowTab('history')">ประวัติ</button>
   </div>
 
@@ -290,6 +320,9 @@
 
     <h2>คำขอย้ายเครื่องจักรที่กำลังดำเนินการ</h2>
     <div id="c1-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c1-tab-report" style="display:none;">
+    <div id="c1-reportList"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="c1-tab-history" style="display:none;">
     <div id="c1-historyList"><div class="loading">กำลังโหลด...</div></div>
@@ -302,12 +335,16 @@
 
   <div class="tab-nav">
     <button type="button" id="c2-tabBtn-active" class="active" onclick="c2ShowTab('active')">ออกเลข PJ</button>
+    <button type="button" id="c2-tabBtn-report" onclick="c2ShowTab('report')">รายงานค่าเช่า</button>
     <button type="button" id="c2-tabBtn-history" onclick="c2ShowTab('history')">ประวัติ</button>
   </div>
 
   <div id="c2-tab-active">
     <p style="font-size:12px;color:#888;">รายการนี้ไม่บล็อกคนขับ - คนขับย้ายไปแล้วก็ได้ ออกเลขตามทีหลังได้ เรียงเก่าสุดก่อน</p>
     <div id="c2-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c2-tab-report" style="display:none;">
+    <div id="c2-reportList"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="c2-tab-history" style="display:none;">
     <div id="c2-historyList"><div class="loading">กำลังโหลด...</div></div>
@@ -464,7 +501,15 @@
     editRequestFields: 'editRequestFields',
     issuePjNumber: 'issuePjNumber',
     closeJob: 'closeJob',
-    markSiteReviewed: 'markSiteReviewed'
+    markSiteReviewed: 'markSiteReviewed',
+    // ---- หยุดใช้งานเครื่องจักร + รายงานค่าเช่า (feature: คำนวณค่าเช่าเครื่องจักร) ----
+    requestPause: 'requestPause',
+    listMyPauses: 'myPauses',
+    reportResume: 'reportResume',
+    listPauseApprovals: 'pauseApprovals',
+    resolvePause: 'resolvePause',
+    listRentalReport: 'rentalReport',
+    editMovedDateTime: 'editMovedDateTime'
   };
   var GET_ACTION_ARGS = {
     whoAmI: ['userId'],
@@ -493,7 +538,14 @@
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
-    markSiteReviewed: ['siteName', 'note']
+    markSiteReviewed: ['siteName', 'note'],
+    requestPause: ['userId', 'payload'],
+    listMyPauses: ['userId'],
+    reportResume: ['userId', 'pauseId', 'resumeDate'],
+    listPauseApprovals: ['userId'],
+    resolvePause: ['userId', 'pauseId', 'approve'],
+    listRentalReport: ['userId'],
+    editMovedDateTime: ['userId', 'requestId', 'newDateTime']
   };
   // เหลือ markMoved อย่างเดียวที่ยังต้องใช้ hidden-iframe-form POST เพราะมีรูปแนบ (base64)
   // ที่อาจยาวเกินขีดจำกัดความยาว URL ของ JSONP/GET
@@ -705,15 +757,101 @@
   function reqShowTab(tab) {
     document.getElementById('req-tab-form').style.display = tab === 'form' ? 'block' : 'none';
     document.getElementById('req-tab-mylist').style.display = tab === 'mylist' ? 'block' : 'none';
+    document.getElementById('req-tab-pause').style.display = tab === 'pause' ? 'block' : 'none';
     document.getElementById('req-tabBtn-form').classList.toggle('active', tab === 'form');
     document.getElementById('req-tabBtn-mylist').classList.toggle('active', tab === 'mylist');
+    document.getElementById('req-tabBtn-pause').classList.toggle('active', tab === 'pause');
     if (tab === 'mylist') reqLoadMyList();
+    if (tab === 'pause') pauLoadMyList();
   }
 
   function reqInit() {
     reqLoadMachines();
     reqLoadSites();
     reqLoadMyList();
+    pauLoadMachines();
+  }
+
+  /* ---------- แจ้งหยุดใช้งานเครื่องจักร (feature: คำนวณค่าเช่าเครื่องจักร) ---------- */
+  var pauMachines = [];
+  var pauMachineByLabel = {};
+  var pauSelectedMachine = null;
+  var pauStatusBadgeClass_ = function (status) {
+    var map = { 'รออนุมัติ': 'status-pending', 'อนุมัติแล้ว': 'status-approved', 'ไม่อนุมัติ': 'status-rejected' };
+    return 'badge ' + (map[status] || '');
+  };
+
+  function pauLoadMachines() {
+    callServer('getMachineList').then(function (list) {
+      pauMachines = list;
+      pauMachineByLabel = {};
+      var dl = document.getElementById('pau-machineList');
+      dl.innerHTML = '';
+      list.forEach(function (m) {
+        var label = reqMachineLabel_(m);
+        pauMachineByLabel[label] = m;
+        var opt = document.createElement('option');
+        opt.value = label;
+        dl.appendChild(opt);
+      });
+      var input = document.getElementById('pau-machineInput');
+      input.addEventListener('input', function () {
+        pauSelectedMachine = pauMachineByLabel[input.value] || null;
+      });
+    });
+  }
+
+  function pauSubmit() {
+    if (!pauSelectedMachine) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ (พิมพ์ค้นหาแล้วแตะเลือก)');
+    var payload = {
+      machineCode: pauSelectedMachine.code,
+      startDate: document.getElementById('pau-startDate').value,
+      reason: document.getElementById('pau-reason').value
+    };
+    document.getElementById('pau-submitBtn').disabled = true;
+    callServer('requestPause', CURRENT_USER.userId, payload)
+      .then(function () {
+        var successEl = document.getElementById('pau-successMsg');
+        successEl.textContent = '✅ ส่งคำขอหยุดใช้งานแล้ว รอผู้อนุมัติ';
+        successEl.style.display = 'block';
+        clearTimeout(window.__pauSuccessTimer);
+        window.__pauSuccessTimer = setTimeout(function () { successEl.style.display = 'none'; }, 4000);
+        document.getElementById('pau-machineInput').value = '';
+        document.getElementById('pau-startDate').value = '';
+        document.getElementById('pau-reason').value = '';
+        pauSelectedMachine = null;
+        pauLoadMyList();
+      })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); })
+      .finally(function () { document.getElementById('pau-submitBtn').disabled = false; });
+  }
+
+  function pauLoadMyList() {
+    callServer('listMyPauses', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('pau-myList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่เคยแจ้งหยุดใช้งาน</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var id = r['Pause ID'];
+        var canResume = r['สถานะ'] === 'อนุมัติแล้ว' && !r['วันที่กลับมาใช้งาน'];
+        return '<div class="card">' +
+          '<span class="' + pauStatusBadgeClass_(r['สถานะ']) + '">' + r['สถานะ'] + '</span>' +
+          '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">หน้างาน</span><span>' + r['หน้างาน'] + '</span></div>' +
+          '<div class="row"><span class="label">เริ่มหยุด</span><span>' + formatDateTH_(r['วันที่เริ่มหยุด']) + '</span></div>' +
+          (r['วันที่กลับมาใช้งาน'] ? '<div class="row"><span class="label">กลับมาใช้งาน</span><span>' + formatDateTH_(r['วันที่กลับมาใช้งาน']) + '</span></div>' : '') +
+          (canResume ?
+            '<button class="success" onclick="pauReportResume(\'' + id + '\', this)">แจ้งกลับมาใช้งานแล้ว</button>' : '') +
+          '</div>';
+      }).join('');
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function pauReportResume(id, btn) {
+    btn.disabled = true;
+    callServer('reportResume', CURRENT_USER.userId, id, '')
+      .then(function () { showToast('แจ้งกลับมาใช้งานแล้ว'); pauLoadMyList(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
   function reqLoadMachines() {
@@ -924,10 +1062,70 @@
 
   function aprShowTab(tab) {
     document.getElementById('apr-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('apr-tab-pause').style.display = tab === 'pause' ? 'block' : 'none';
+    document.getElementById('apr-tab-report').style.display = tab === 'report' ? 'block' : 'none';
     document.getElementById('apr-tab-history').style.display = tab === 'history' ? 'block' : 'none';
     document.getElementById('apr-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('apr-tabBtn-pause').classList.toggle('active', tab === 'pause');
+    document.getElementById('apr-tabBtn-report').classList.toggle('active', tab === 'report');
     document.getElementById('apr-tabBtn-history').classList.toggle('active', tab === 'history');
-    if (tab === 'active') aprLoad(); else aprLoadHistory();
+    if (tab === 'active') aprLoad();
+    else if (tab === 'pause') aprLoadPause();
+    else if (tab === 'report') aprLoadReport();
+    else aprLoadHistory();
+  }
+
+  /* ---------- อนุมัติคำขอหยุดใช้งานเครื่องจักร (feature: คำนวณค่าเช่าเครื่องจักร) ---------- */
+  function aprLoadPause() {
+    callServer('listPauseApprovals', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('apr-pauseList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีคำขอหยุดใช้งานรออนุมัติ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        var id = r['Pause ID'];
+        return '<div class="card">' +
+          '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">หน้างาน</span><span>' + r['หน้างาน'] + '</span></div>' +
+          '<div class="row"><span class="label">ผู้แจ้ง</span><span>' + r['ผู้แจ้ง'] + '</span></div>' +
+          '<div class="row"><span class="label">เริ่มหยุด</span><span>' + formatDateTH_(r['วันที่เริ่มหยุด']) + '</span></div>' +
+          (r['เหตุผล'] ? '<div class="row"><span class="label">เหตุผล</span><span>' + r['เหตุผล'] + '</span></div>' : '') +
+          '<div>' +
+          '<button class="success" onclick="aprResolvePause(\'' + id + '\', true, this)">อนุมัติ</button>' +
+          '<button class="danger" onclick="aprResolvePause(\'' + id + '\', false, this)">ไม่อนุมัติ</button>' +
+          '</div></div>';
+      }).join('');
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function aprResolvePause(id, approve, btn) {
+    btn.disabled = true;
+    callServer('resolvePause', CURRENT_USER.userId, id, approve ? '1' : '0')
+      .then(function () { showToast(approve ? 'อนุมัติแล้ว' : 'บันทึกไม่อนุมัติแล้ว'); aprLoadPause(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  /* ---------- รายงานวันคิดค่าเช่าเครื่องจักร (ใช้ร่วมกัน 3 บทบาท: ผู้อนุมัติ/เสมียน1/เสมียน2) ---------- */
+  function renderRentalReport_(rows) {
+    if (!rows.length) return '<div class="empty">ยังไม่มีข้อมูล</div>';
+    return rows.map(function (r) {
+      return '<div class="card">' +
+        (r.interim ? '<span class="badge">ยังอยู่หน้างาน (ยอดชั่วคราว)</span>' : '<span class="badge status-closed">ย้ายออกแล้ว</span>') +
+        '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r.requestId + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r.machine + '</span></div>' +
+        '<div class="row"><span class="label">หน้างาน</span><span>' + r.site + '</span></div>' +
+        '<div class="row"><span class="label">เข้าหน้างาน</span><span>' + r.entry + '</span></div>' +
+        '<div class="row"><span class="label">ออกจากหน้างาน</span><span>' + (r.exit || '(ยังอยู่)') + '</span></div>' +
+        (r.pauseDays ? '<div class="row"><span class="label">หักวันหยุดใช้งาน</span><span>' + r.pauseDays + ' วัน</span></div>' : '') +
+        '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า</span><span><strong>' + r.billableDays + ' วัน</strong></span></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function aprLoadReport() {
+    var el = document.getElementById('apr-reportList');
+    callServer('listRentalReport', CURRENT_USER.userId).then(function (rows) {
+      el.innerHTML = renderRentalReport_(rows);
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   function aprLoadHistory() {
@@ -1013,31 +1211,30 @@
   function drvOpenMovedForm(id) {
     var box = document.getElementById('drv-form-' + id);
     box.innerHTML =
-      '<label>วันที่ย้ายจริง</label>' +
-      '<input type="date" id="drv-date-' + id + '">' +
+      '<div style="font-size:12px;color:#888;margin:2px 0 8px;">ระบบจะบันทึกวันที่-เวลาปัจจุบันให้อัตโนมัติตอนกดยืนยัน (ถ้ากดผิดเวลา แก้ไขทีหลังได้จากแท็บประวัติ)</div>' +
       '<label>รูปหลักฐาน (ถ้ามี)</label>' +
       '<input type="file" accept="image/*" capture="environment" id="drv-photo-' + id + '">' +
-      '<button class="success" onclick="drvSubmitMoved(\'' + id + '\')">ยืนยันย้ายเสร็จ</button>';
+      '<button class="success" onclick="drvSubmitMoved(\'' + id + '\')">ยืนยันย้ายเสร็จ (เวลาปัจจุบัน)</button>';
   }
 
   function drvSubmitMoved(id) {
-    var dateVal = document.getElementById('drv-date-' + id).value;
     var fileInput = document.getElementById('drv-photo-' + id);
     var file = fileInput.files[0];
 
-    if (!file) { drvDoSubmitMoved(id, dateVal, null); return; }
+    if (!file) { drvDoSubmitMoved(id, null); return; }
 
     var reader = new FileReader();
     reader.onload = function () {
       var base64 = reader.result.split(',')[1];
-      drvDoSubmitMoved(id, dateVal, { base64: base64, mimeType: file.type, filename: file.name });
+      drvDoSubmitMoved(id, { base64: base64, mimeType: file.type, filename: file.name });
     };
     reader.readAsDataURL(file);
   }
 
-  function drvDoSubmitMoved(id, dateVal, photo) {
+  /** ไม่ส่งวันที่จากฟอร์มแล้ว - เซิร์ฟเวอร์ใช้เวลาปัจจุบันของตัวเองเสมอ (ดู spec ข้อ 3.1 / markMoved ใน Requests.gs) */
+  function drvDoSubmitMoved(id, photo) {
     showToast('กำลังบันทึก...');
-    callServer('markMoved', CURRENT_USER.userId, id, dateVal, photo)
+    callServer('markMoved', CURRENT_USER.userId, id, '', photo)
       .then(function () { showToast('บันทึกย้ายเสร็จแล้ว'); drvLoadAll(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
@@ -1060,10 +1257,29 @@
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-          '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
+          '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
+          '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', drvLoadHistory)">แก้ไขวันที่/เวลา (กรอกผิด)</button>' +
           '</div>';
       }).join('');
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  /**
+   * แก้ไขวันที่-เวลาย้ายเสร็จ กรณีคนขับกดผิด/เวลาคลาดเคลื่อน (ดู spec ข้อ 3.2 - editMovedDateTime ใน Requests.gs)
+   * ใช้ prompt ธรรมดา 2 ช่อง (วันที่ + เวลา) เพื่อไม่ต้องเพิ่ม modal ใหม่ - รูปแบบต้องเป็น dd/MM/yyyy และ HH:mm
+   */
+  function editMovedDateTimePrompt(id, reloadFn) {
+    var dateStr = prompt('วันที่ใหม่ (รูปแบบ dd/MM/yyyy) เช่น 31/07/2026:');
+    if (dateStr === null) return;
+    var timeStr = prompt('เวลาใหม่ (รูปแบบ HH:mm) เช่น 14:30:', '00:00');
+    if (timeStr === null) return;
+    dateStr = dateStr.trim();
+    timeStr = timeStr.trim();
+    if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) return showToast('รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น dd/MM/yyyy)');
+    if (!/^\d{1,2}:\d{2}$/.test(timeStr)) return showToast('รูปแบบเวลาไม่ถูกต้อง (ต้องเป็น HH:mm)');
+    callServer('editMovedDateTime', CURRENT_USER.userId, id, dateStr + ' ' + timeStr)
+      .then(function () { showToast('แก้ไขแล้ว'); if (reloadFn) reloadFn(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   /* ============================= เสมียน 1 ============================= */
@@ -1112,10 +1328,21 @@
 
   function c1ShowTab(tab) {
     document.getElementById('c1-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c1-tab-report').style.display = tab === 'report' ? 'block' : 'none';
     document.getElementById('c1-tab-history').style.display = tab === 'history' ? 'block' : 'none';
     document.getElementById('c1-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c1-tabBtn-report').classList.toggle('active', tab === 'report');
     document.getElementById('c1-tabBtn-history').classList.toggle('active', tab === 'history');
-    if (tab === 'active') c1LoadList(); else c1LoadHistory();
+    if (tab === 'active') c1LoadList();
+    else if (tab === 'report') c1LoadReport();
+    else c1LoadHistory();
+  }
+
+  function c1LoadReport() {
+    var el = document.getElementById('c1-reportList');
+    callServer('listRentalReport', CURRENT_USER.userId).then(function (rows) {
+      el.innerHTML = renderRentalReport_(rows);
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   function c1LoadHistory() {
@@ -1135,6 +1362,10 @@
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+        (r['วันที่ขนย้ายจริง'] ?
+          '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
+          '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', c1LoadHistory)">แก้ไขวันที่/เวลา (กรอกผิด)</button>'
+          : '') +
         '</div>';
     }).join('');
   }
@@ -1143,21 +1374,31 @@
   function c2Init() { c2Load(); }
 
   function c2Load() {
-    callServer('listPjBacklog', CURRENT_USER.userId).then(c2Render)
-      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+    // โหลดคู่กับรายงานวันคิดค่าเช่า เอาไว้โชว์จำนวนวันในการ์ดเลย ไม่ต้องสลับไปแท็บรายงานแยก (ดู spec ข้อ 6)
+    Promise.all([
+      callServer('listPjBacklog', CURRENT_USER.userId),
+      callServer('listRentalReport', CURRENT_USER.userId).catch(function () { return []; })
+    ]).then(function (results) {
+      var rentalByRequestId = {};
+      results[1].forEach(function (r) { rentalByRequestId[r.requestId] = r; });
+      c2Render(results[0], rentalByRequestId);
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
-  function c2Render(rows) {
+  function c2Render(rows, rentalByRequestId) {
+    rentalByRequestId = rentalByRequestId || {};
     var el = document.getElementById('c2-list');
     if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานค้างออกเลข PJ</div>'; return; }
     el.innerHTML = rows.map(function (r) {
       var id = r['Request ID'];
+      var rental = rentalByRequestId[id];
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ขอ</span><span>' + r['วันที่ขอ'] + '</span></div>' +
+        (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
         '<input type="text" id="c2-pj-' + id + '" placeholder="กรอกเลข PJ">' +
         '<button onclick="c2Issue(\'' + id + '\', this)">บันทึกเลข PJ</button>' +
         '</div>';
@@ -1175,10 +1416,21 @@
 
   function c2ShowTab(tab) {
     document.getElementById('c2-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c2-tab-report').style.display = tab === 'report' ? 'block' : 'none';
     document.getElementById('c2-tab-history').style.display = tab === 'history' ? 'block' : 'none';
     document.getElementById('c2-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c2-tabBtn-report').classList.toggle('active', tab === 'report');
     document.getElementById('c2-tabBtn-history').classList.toggle('active', tab === 'history');
-    if (tab === 'active') c2Load(); else c2LoadHistory();
+    if (tab === 'active') c2Load();
+    else if (tab === 'report') c2LoadReport();
+    else c2LoadHistory();
+  }
+
+  function c2LoadReport() {
+    var el = document.getElementById('c2-reportList');
+    callServer('listRentalReport', CURRENT_USER.userId).then(function (rows) {
+      el.innerHTML = renderRentalReport_(rows);
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   function c2LoadHistory() {
