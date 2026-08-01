@@ -941,14 +941,15 @@
         dl.appendChild(opt);
       });
 
-      // ช่องต้นทางใช้ชื่อหน้างานล้วนๆ (ไม่มีรหัสโครงการนำหน้า) เพราะค่าที่ auto-fill มาจาก
-      // machine.currentSite ซึ่งเป็นชื่อล้วนอยู่แล้ว (ดู reqLoadMachines ด้านล่าง) - แยก datalist
-      // ต่างหากจากปลายทาง เพื่อให้ค้นหา/เลือกได้แบบเดียวกับปลายทาง แต่ value ตรงกับรูปแบบที่ใช้จริง
+      // ช่องต้นทางใส่รหัสโครงการนำหน้าเหมือนปลายทางด้วย (ใช้ reqSiteLabel_ แบบเดียวกัน) เพราะช่างค้นหา
+      // ด้วยรหัสโครงการเป็นหลัก ถ้ามีแต่ชื่อล้วนจะหาไม่เจอ - ค่าที่ auto-fill จาก machine.currentSite
+      // ก็เป็นสตริงรูปแบบ "รหัส - ชื่อ" อยู่แล้วเช่นกัน (เพราะถูกเขียนมาจากช่องปลายทางตอนย้ายครั้งก่อน
+      // ผ่าน updateMachineLocation_) จึงตรงกับรูปแบบ label นี้พอดี ไม่ทำให้ backend เช็ค origin mismatch ผิดพลาด
       var originDl = document.getElementById('req-originList');
       originDl.innerHTML = ''; // เคลียร์ก่อนเสมอเช่นกัน
       list.forEach(function (s) {
         var opt = document.createElement('option');
-        opt.value = s.name;
+        opt.value = reqSiteLabel_(s);
         originDl.appendChild(opt);
       });
     });
