@@ -281,6 +281,8 @@
   </div>
   <div id="apr-tab-history" style="display:none;">
     <div id="apr-historyList"><div class="loading">กำลังโหลด...</div></div>
+    <h2 style="margin-top:24px;">ประวัติคำขอหยุดใช้งาน</h2>
+    <div id="apr-historyPauseList"><div class="loading">กำลังโหลด...</div></div>
   </div>
 </div>
 
@@ -523,6 +525,7 @@
     listMyPauses: 'myPauses',
     reportResume: 'reportResume',
     listPauseApprovals: 'pauseApprovals',
+    listPauseHistory: 'pauseHistory',
     resolvePause: 'resolvePause',
     listRentalReport: 'rentalReport',
     editMovedDateTime: 'editMovedDateTime'
@@ -559,6 +562,7 @@
     listMyPauses: ['userId'],
     reportResume: ['userId', 'pauseId', 'resumeDate'],
     listPauseApprovals: ['userId'],
+    listPauseHistory: ['userId'],
     resolvePause: ['userId', 'pauseId', 'approve'],
     listRentalReport: ['userId'],
     editMovedDateTime: ['userId', 'requestId', 'newDateTime']
@@ -1195,6 +1199,28 @@
   function aprLoadHistory() {
     callServer('listApprovalHistory', CURRENT_USER.userId).then(aprRenderHistory)
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+    // ประวัติคำขอหยุดใช้งาน (อนุมัติแล้ว/ไม่อนุมัติ) - เดิมแท็บนี้แสดงแต่ประวัติคำขอย้ายเครื่องจักร
+    // ไม่มีคำขอหยุดใช้งานที่จบไปแล้วเลย ดึงมาแสดงแยกส่วนด้านล่างเพิ่ม
+    callServer('listPauseHistory', CURRENT_USER.userId).then(aprRenderPauseHistory)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function aprRenderPauseHistory(rows) {
+    var el = document.getElementById('apr-historyPauseList');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      return '<div class="card">' +
+        '<span class="' + pauStatusBadgeClass_(r['สถานะ']) + '">' + r['สถานะ'] + '</span>' +
+        '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Pause ID'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">หน้างาน</span><span>' + r['หน้างาน'] + '</span></div>' +
+        '<div class="row"><span class="label">ผู้แจ้ง</span><span>' + r['ผู้แจ้ง'] + '</span></div>' +
+        '<div class="row"><span class="label">เริ่มหยุด</span><span>' + formatDateTH_(r['วันที่เริ่มหยุด']) + '</span></div>' +
+        (r['วันที่กลับมาใช้งาน'] ? '<div class="row"><span class="label">กลับมาใช้งาน</span><span>' + formatDateTH_(r['วันที่กลับมาใช้งาน']) + '</span></div>' : '') +
+        '<div class="row"><span class="label">ผู้อนุมัติ</span><span>' + (r['ผู้อนุมัติ + เวลา'] || '-') + '</span></div>' +
+        (r['เหตุผล'] ? '<div class="row"><span class="label">เหตุผล</span><span>' + r['เหตุผล'] + '</span></div>' : '') +
+        '</div>';
+    }).join('');
   }
 
   function aprRenderHistory(rows) {
