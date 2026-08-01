@@ -329,6 +329,8 @@
   </div>
   <div id="c1-tab-history" style="display:none;">
     <div id="c1-historyList"><div class="loading">กำลังโหลด...</div></div>
+    <h2 style="margin-top:24px;">ประวัติตรวจสอบหน้างานใหม่</h2>
+    <div id="c1-historySitesList"><div class="loading">กำลังโหลด...</div></div>
   </div>
 </div>
 
@@ -497,6 +499,7 @@
     listMyClaimedJobs: 'myClaimedJobs',
     listAllRequests: 'allRequests',
     listSitesPendingReview: 'sitesPendingReview',
+    listSitesReviewed: 'sitesReviewed',
     listPjBacklog: 'pjBacklog',
     listPendingAudit: 'pendingAudit',
     // ---- ประวัติย้อนหลัง (แยก action ต่างหากจากคิวงานปัจจุบัน ไม่ต้องโหลดทุกครั้ง) ----
@@ -540,6 +543,7 @@
     listMyClaimedJobs: ['userId'],
     listAllRequests: ['userId'],
     listSitesPendingReview: [],
+    listSitesReviewed: [],
     listPjBacklog: ['userId'],
     listPendingAudit: ['userId'],
     listApprovalHistory: ['userId'],
@@ -557,7 +561,7 @@
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
-    markSiteReviewed: ['siteName', 'note'],
+    markSiteReviewed: ['userId', 'siteName', 'note'],
     requestPause: ['userId', 'payload'],
     listMyPauses: ['userId'],
     reportResume: ['userId', 'pauseId', 'resumeDate'],
@@ -1352,13 +1356,18 @@
       var el = document.getElementById('drv-historyList');
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
       el.innerHTML = rows.map(function (r) {
+        var isClosed = r['สถานะการย้าย (แกน A)'] === 'ปิดงาน';
         return '<div class="card">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
-          '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', drvLoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>' +
+          // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้ายอีก กันยอดค่าเช่าที่ตรวจไปแล้วเปลี่ยน
+          // แบบไม่มีใครรู้ (ดู editMovedDateTime ใน Requests.gs ที่บล็อกไว้ฝั่งเซิร์ฟเวอร์ด้วยเหมือนกัน)
+          (isClosed ?
+            '<div style="font-size:12px;color:#888;">ปิดงานแล้ว แก้ไขวันที่ย้ายไม่ได้ (ติดต่อผู้ดูแลระบบถ้าจำเป็น)</div>' :
+            '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', drvLoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>') +
           '</div>';
       }).join('');
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
@@ -1445,7 +1454,7 @@
 
   function c1MarkReviewed(name, btn) {
     btn.disabled = true;
-    callServer('markSiteReviewed', name, 'ตรวจสอบแล้ว')
+    callServer('markSiteReviewed', CURRENT_USER.userId, name, 'ตรวจสอบแล้ว')
       .then(function () { showToast('อัปเดตแล้ว'); c1LoadSites(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
@@ -1491,12 +1500,28 @@
   function c1LoadHistory() {
     callServer('listRequestHistory', CURRENT_USER.userId).then(c1RenderHistory)
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+    // ประวัติหน้างานใหม่ที่ตรวจสอบไปแล้ว - เดิมกดตรวจสอบแล้วหน้างานนั้นหายไปเลย ดูย้อนหลังไม่ได้
+    callServer('listSitesReviewed').then(c1RenderSitesHistory)
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function c1RenderSitesHistory(rows) {
+    var el = document.getElementById('c1-historySitesList');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      return '<div class="card">' +
+        '<div class="row"><span class="label">ชื่อหน้างาน</span><span>' + r['ชื่อหน้างาน'] + '</span></div>' +
+        '<div class="row"><span class="label">เพิ่มโดย</span><span>' + r['เพิ่มโดย'] + ' (' + r['วันที่เพิ่ม'] + ')</span></div>' +
+        '<div class="row"><span class="label">สถานะตรวจสอบ</span><span>' + r['สถานะตรวจสอบ'] + '</span></div>' +
+        '</div>';
+    }).join('');
   }
 
   function c1RenderHistory(rows) {
     var el = document.getElementById('c1-historyList');
     if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
     el.innerHTML = rows.map(function (r) {
+      var isClosed = r['สถานะการย้าย (แกน A)'] === 'ปิดงาน';
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
@@ -1507,7 +1532,11 @@
         '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
         (r['วันที่ขนย้ายจริง'] ?
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
-          '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', c1LoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>'
+          // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้ายอีก กันยอดค่าเช่าที่ตรวจไปแล้วเปลี่ยน
+          // แบบไม่มีใครรู้ (ดู editMovedDateTime ใน Requests.gs ที่บล็อกไว้ฝั่งเซิร์ฟเวอร์ด้วยเหมือนกัน)
+          (isClosed ?
+            '<div style="font-size:12px;color:#888;">ปิดงานแล้ว แก้ไขวันที่ย้ายไม่ได้ (ติดต่อผู้ดูแลระบบถ้าจำเป็น)</div>' :
+            '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', c1LoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>')
           : '') +
         '</div>';
     }).join('');
