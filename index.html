@@ -216,6 +216,9 @@
     <input id="rpt-date" type="date">
     <button type="button" onclick="reportLoad()">ดูรายงาน</button>
     <div style="font-size:11px;color:#888;margin-top:-4px;">เลือกวันที่ย้อนหลัง = คำนวณจากประวัติคำขอย้ายที่มีอยู่ในระบบเท่านั้น (ไม่รวมการแก้ตำแหน่งด้วยมือ)</div>
+
+    <label style="margin-top:10px;">ค้นหาตามชื่อหน้างาน</label>
+    <input id="rpt-siteSearch" placeholder="พิมพ์ชื่อหรือรหัสหน้างาน" oninput="rptRender()">
   </div>
   <div id="rpt-result"></div>
 </div>
@@ -942,6 +945,14 @@
     if (!m) return '';
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     return m[3] + '-' + pad(parseInt(m[2], 10)) + '-' + pad(parseInt(m[1], 10));
+  }
+
+  /** ให้สีป้ายสถานะเครื่องจักรต่างกันตามความรุนแรง (พร้อมใช้=เขียว, กำลังซ่อม=เหลือง/ส้ม, พัง=แดง)
+   *  ใช้ร่วมกันทั้งหน้าตรวจสอบเครื่องจักร/รายงานหน้างาน/เสมียน4 กันสีไม่ตรงกันระหว่างหน้า */
+  function maintStatusBadgeClass_(status) {
+    if (status === 'พัง') return 'status-rejected';
+    if (status === 'กำลังซ่อม') return 'status-pending';
+    return 'status-moved';
   }
 
   function reqMachineLabel_(m) {
@@ -1891,11 +1902,12 @@
     if (!code) return showToast('กรุณาพิมพ์รหัสเครื่องจักร');
     document.getElementById('lku-result').innerHTML = '<div class="loading">กำลังค้นหา...</div>';
     callServer('getMachineStatus', code).then(function (r) {
-      var isReady = !r.maintStatus || r.maintStatus === 'พร้อมใช้';
+      var status = r.maintStatus || 'พร้อมใช้';
+      var isReady = status === 'พร้อมใช้';
       document.getElementById('lku-result').innerHTML =
         '<div class="card">' +
         '<div class="machine-value">🚜 ' + r.code + (r.type ? ' (' + r.type + ')' : '') + '</div>' +
-        '<span class="badge ' + (isReady ? 'status-moved' : 'status-rejected') + '">' + (r.maintStatus || 'พร้อมใช้') + '</span>' +
+        '<span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span>' +
         '<div class="row"><span class="label">หน้างานปัจจุบัน</span><span>' + (r.currentSite || '-') + '</span></div>' +
         '<div class="row"><span class="label">ย้ายเข้าวันที่</span><span>' + (r.movedInDate || '-') + '</span></div>' +
         '<div class="row"><span class="label">อยู่มาแล้ว</span><span>' + (r.daysAtSite != null ? r.daysAtSite + ' วัน' : '-') + '</span></div>' +
@@ -1911,8 +1923,11 @@
   }
 
   /* ============================= รายงานเครื่องจักรตามหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ============================= */
+  var rptLastData = null; // เก็บผลลัพธ์ล่าสุดจากเซิร์ฟเวอร์ไว้ ใช้กรองตามชื่อหน้างานฝั่ง client โดยไม่ต้องยิง API ซ้ำ
+
   function reportInit() {
     document.getElementById('rpt-date').value = '';
+    document.getElementById('rpt-siteSearch').value = '';
     reportLoad();
   }
 
@@ -1920,31 +1935,44 @@
     var asOf = isoToThaiDate_(document.getElementById('rpt-date').value); // '' ถ้าไม่เลือก = ข้อมูลปัจจุบัน
     document.getElementById('rpt-result').innerHTML = '<div class="loading">กำลังโหลด...</div>';
     callServer('getSiteMachineReport', asOf).then(function (r) {
-      var html = '<div style="font-size:12px;color:#888;margin-bottom:8px;">ข้อมูล ณ วันที่ ' + (r.asOf || '-') + '</div>';
-      if (!r.sites.length) {
-        html += '<div class="empty">ไม่มีข้อมูล</div>';
-      } else {
-        html += r.sites.map(function (s) {
-          return '<div class="card">' +
-            '<div class="machine-value">📍 ' + s.site + ' (' + s.machines.length + ' คัน)</div>' +
-            s.machines.map(function (m) {
-              var notReady = m.maintStatus && m.maintStatus !== 'พร้อมใช้';
-              return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
-                (notReady ? '<span class="badge status-rejected">' + m.maintStatus + '</span>' : '') +
-                '</div>';
-            }).join('') +
-            '</div>';
-        }).join('');
-      }
-      if (r.noHistory && r.noHistory.length) {
-        html += '<h2>ไม่มีประวัติก่อนวันที่เลือก</h2><div class="card">' +
-          r.noHistory.map(function (m) { return m.code + (m.type ? ' (' + m.type + ')' : ''); }).join(', ') +
-          '</div>';
-      }
-      document.getElementById('rpt-result').innerHTML = html;
+      rptLastData = r;
+      rptRender();
     }).catch(function (err) {
+      rptLastData = null;
       document.getElementById('rpt-result').innerHTML = '<div class="empty">ผิดพลาด: ' + err + '</div>';
     });
+  }
+
+  /** วาดผลลัพธ์จาก rptLastData ใหม่ตามคำค้นหาชื่อหน้างานปัจจุบัน (ไม่ยิง API ซ้ำ - กรองข้อมูลที่โหลดมาแล้ว) */
+  function rptRender() {
+    if (!rptLastData) return;
+    var r = rptLastData;
+    var q = document.getElementById('rpt-siteSearch').value.trim().toLowerCase();
+    var sites = q ? r.sites.filter(function (s) { return s.site.toLowerCase().indexOf(q) !== -1; }) : r.sites;
+
+    var html = '<div style="font-size:12px;color:#888;margin-bottom:8px;">ข้อมูล ณ วันที่ ' + (r.asOf || '-') + '</div>';
+    if (!sites.length) {
+      html += '<div class="empty">' + (q ? 'ไม่พบหน้างานที่ตรงกับ "' + q + '"' : 'ไม่มีข้อมูล') + '</div>';
+    } else {
+      html += sites.map(function (s) {
+        return '<div class="card">' +
+          '<div class="machine-value">📍 ' + s.site + ' (' + s.machines.length + ' คัน)</div>' +
+          s.machines.map(function (m) {
+            var status = m.maintStatus || 'พร้อมใช้';
+            return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
+              '<span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span>' +
+              '</div>';
+          }).join('') +
+          '</div>';
+      }).join('');
+    }
+    // รายการที่ไม่มีประวัติก่อนวันที่เลือก โชว์เฉพาะตอนไม่ได้ค้นหาหน้างาน (ไม่เกี่ยวกับหน้างานอยู่แล้ว)
+    if (!q && r.noHistory && r.noHistory.length) {
+      html += '<h2>ไม่มีประวัติก่อนวันที่เลือก</h2><div class="card">' +
+        r.noHistory.map(function (m) { return m.code + (m.type ? ' (' + m.type + ')' : ''); }).join(', ') +
+        '</div>';
+    }
+    document.getElementById('rpt-result').innerHTML = html;
   }
 
   /* ============================= เสมียน 4 (ซ่อมบำรุง) ============================= */
@@ -1987,10 +2015,9 @@
     var el = document.getElementById('c4-list');
     if (!list.length) { el.innerHTML = '<div class="empty">ไม่มีรายการ</div>'; return; }
     el.innerHTML = list.map(function (m) {
-      var badgeClass = m.maintStatus === 'พัง' ? 'status-rejected' : (m.maintStatus === 'กำลังซ่อม' ? 'status-pending' : 'status-moved');
       return '<div class="card">' +
         '<div class="machine-value">🚜 ' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</div>' +
-        '<span class="badge ' + badgeClass + '">' + m.maintStatus + '</span>' +
+        '<span class="badge ' + maintStatusBadgeClass_(m.maintStatus) + '">' + m.maintStatus + '</span>' +
         '<div class="row"><span class="label">หน้างานปัจจุบัน</span><span>' + (m.currentSite || '-') + '</span></div>' +
         (m.maintStatus !== 'พร้อมใช้' ? (
           '<div class="row"><span class="label">สถานที่ซ่อม</span><span>' + (m.repairLocation || '-') + '</span></div>' +
