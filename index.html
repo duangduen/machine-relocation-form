@@ -792,11 +792,24 @@
     if (tab === 'pause') pauLoadMyList();
   }
 
+  var reqAutoRefreshTimer_ = null;
   function reqInit() {
     reqLoadMachines();
     reqLoadSites();
     reqLoadMyList();
     pauLoadMachines();
+
+    // รีเฟรชรายชื่อเครื่องจักร/หน้างานเป็นระยะ ระหว่างที่อยู่แท็บนี้ กันข้อมูล "ตำแหน่งปัจจุบัน" ค้าง
+    // เก่า เผื่อ user เปิดหน้านี้แช่ไว้นานโดยไม่ได้สลับแท็บ/รีเฟรชหน้าเว็บเอง แล้วมีเครื่องจักรถูกย้าย
+    // (โดยคนอื่น หรือจากการทดสอบคนละหน้าต่าง) ระหว่างนั้นพอดี - เดิมโหลดแค่ครั้งเดียวตอนเข้าแท็บ
+    clearInterval(reqAutoRefreshTimer_);
+    reqAutoRefreshTimer_ = setInterval(function () {
+      var sec = document.getElementById('section-request');
+      if (!sec || sec.style.display === 'none') return; // สลับไปแท็บอื่นแล้ว ข้ามไปเฉยๆ ประหยัด request
+      reqLoadMachines();
+      reqLoadSites();
+      pauLoadMachines();
+    }, 60000); // ทุก 60 วินาที
   }
 
   /* ---------- แจ้งหยุดใช้งานเครื่องจักร (feature: คำนวณค่าเช่าเครื่องจักร) ---------- */
@@ -808,12 +821,13 @@
     return 'badge ' + (map[status] || '');
   };
 
+  var pauMachineListenerAttached_ = false;
   function pauLoadMachines() {
     callServer('getMachineList').then(function (list) {
       pauMachines = list;
       pauMachineByLabel = {};
       var dl = document.getElementById('pau-machineList');
-      dl.innerHTML = '';
+      dl.innerHTML = ''; // เคลียร์ก่อนเสมอ กันตัวเลือกซ้ำเวลาถูกเรียกซ้ำ (auto-refresh ทุก 60 วิ)
       list.forEach(function (m) {
         var label = reqMachineLabel_(m);
         pauMachineByLabel[label] = m;
@@ -821,10 +835,14 @@
         opt.value = label;
         dl.appendChild(opt);
       });
-      var input = document.getElementById('pau-machineInput');
-      input.addEventListener('input', function () {
-        pauSelectedMachine = pauMachineByLabel[input.value] || null;
-      });
+      // แนบ listener แค่ครั้งเดียว (ไม่ใช่ทุกครั้งที่โหลดซ้ำ) กัน handler ซ้อนกันหลายชั้นตอน auto-refresh
+      // pauMachineByLabel เป็นตัวแปรกลาง อ่านค่าล่าสุดเสมอตอน event เกิดขึ้นจริง ไม่ต้อง re-bind ก็ทันสมัย
+      if (!pauMachineListenerAttached_) {
+        pauMachineListenerAttached_ = true;
+        document.getElementById('pau-machineInput').addEventListener('input', function () {
+          pauSelectedMachine = pauMachineByLabel[this.value] || null;
+        });
+      }
     });
   }
 
@@ -881,11 +899,13 @@
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
+  var reqMachineListenerAttached_ = false;
   function reqLoadMachines() {
     callServer('getMachineList').then(function (list) {
       reqMachines = list;
       reqMachineByLabel = {};
       var dl = document.getElementById('req-machineList');
+      dl.innerHTML = ''; // เคลียร์ก่อนเสมอ กันตัวเลือกซ้ำเวลาถูกเรียกซ้ำ (auto-refresh ทุก 60 วิ)
       list.forEach(function (m) {
         var label = reqMachineLabel_(m);
         reqMachineByLabel[label] = m;
@@ -894,12 +914,16 @@
         dl.appendChild(opt);
       });
 
-      var input = document.getElementById('req-machineInput');
-      input.addEventListener('input', function () {
-        var m = reqMachineByLabel[input.value];
-        reqSelectedMachine = m || null;
-        document.getElementById('req-origin').value = m ? m.currentSite : '';
-      });
+      // แนบ listener แค่ครั้งเดียว (ไม่ใช่ทุกครั้งที่โหลดซ้ำ) กัน handler ซ้อนกันหลายชั้นตอน auto-refresh
+      // reqMachineByLabel เป็นตัวแปรกลาง อ่านค่าล่าสุดเสมอตอน event เกิดขึ้นจริง ไม่ต้อง re-bind ก็ทันสมัย
+      if (!reqMachineListenerAttached_) {
+        reqMachineListenerAttached_ = true;
+        document.getElementById('req-machineInput').addEventListener('input', function () {
+          var m = reqMachineByLabel[this.value];
+          reqSelectedMachine = m || null;
+          document.getElementById('req-origin').value = m ? m.currentSite : '';
+        });
+      }
     });
   }
 
@@ -908,6 +932,7 @@
       reqSites = list;
       reqSiteByLabel = {};
       var dl = document.getElementById('req-siteList');
+      dl.innerHTML = ''; // เคลียร์ก่อนเสมอ กันตัวเลือกซ้ำเวลาถูกเรียกซ้ำ (auto-refresh ทุก 60 วิ)
       list.forEach(function (s) {
         var label = reqSiteLabel_(s);
         reqSiteByLabel[label] = s;
@@ -920,6 +945,7 @@
       // machine.currentSite ซึ่งเป็นชื่อล้วนอยู่แล้ว (ดู reqLoadMachines ด้านล่าง) - แยก datalist
       // ต่างหากจากปลายทาง เพื่อให้ค้นหา/เลือกได้แบบเดียวกับปลายทาง แต่ value ตรงกับรูปแบบที่ใช้จริง
       var originDl = document.getElementById('req-originList');
+      originDl.innerHTML = ''; // เคลียร์ก่อนเสมอเช่นกัน
       list.forEach(function (s) {
         var opt = document.createElement('option');
         opt.value = s.name;
