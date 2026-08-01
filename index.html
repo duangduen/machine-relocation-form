@@ -184,8 +184,40 @@
 
 <div id="role-switcher" class="tab-nav" style="display:none;"></div>
 
+<!-- ปุ่มที่ทุกบทบาทเห็นเหมือนกันหมด (ไม่ผูกกับ role-section) - ใช้คู่กับ Rich Menu เมนูเดียวที่ใช้ร่วมทุกบทบาท -->
+<div id="shared-nav" style="display:none; gap:8px; margin-bottom:14px;">
+  <button type="button" class="secondary" style="flex:1;" onclick="showSharedSection('section-lookup')">🔍 ตรวจสอบเครื่องจักร</button>
+  <button type="button" class="secondary" style="flex:1;" onclick="showSharedSection('section-report')">📊 รายงานหน้างาน</button>
+</div>
+
 <div id="not-registered" class="card" style="display:none;">
   บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>กรุณาแจ้งเสมียน 1 เพื่อเพิ่มชื่อในระบบ
+</div>
+
+<!-- ============ ตรวจสอบเครื่องจักร (ทุกบทบาทเห็นเหมือนกัน) ============ -->
+<div id="section-lookup" class="role-section">
+  <h1>🔍 ตรวจสอบเครื่องจักร</h1>
+  <button type="button" class="secondary" onclick="backToRoleHome()">← กลับเมนูหลัก</button>
+  <div class="card">
+    <label>พิมพ์ค้นหาทะเบียน/ชนิดรถ</label>
+    <input id="lku-machineInput" list="lku-machineList" placeholder="เช่น X-12" autocomplete="off">
+    <datalist id="lku-machineList"></datalist>
+    <button type="button" onclick="lookupSearch()">ค้นหา</button>
+  </div>
+  <div id="lku-result"></div>
+</div>
+
+<!-- ============ รายงานเครื่องจักรตามหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ============ -->
+<div id="section-report" class="role-section">
+  <h1>📊 รายงานเครื่องจักรตามหน้างาน</h1>
+  <button type="button" class="secondary" onclick="backToRoleHome()">← กลับเมนูหลัก</button>
+  <div class="card">
+    <label>ดูข้อมูล ณ วันที่ (เว้นว่าง = ข้อมูลปัจจุบัน)</label>
+    <input id="rpt-date" type="date">
+    <button type="button" onclick="reportLoad()">ดูรายงาน</button>
+    <div style="font-size:11px;color:#888;margin-top:-4px;">เลือกวันที่ย้อนหลัง = คำนวณจากประวัติคำขอย้ายที่มีอยู่ในระบบเท่านั้น (ไม่รวมการแก้ตำแหน่งด้วยมือ)</div>
+  </div>
+  <div id="rpt-result"></div>
 </div>
 
 <!-- ============ ช่างคุมงาน: ขอย้ายเครื่องจักร ============ -->
@@ -207,6 +239,7 @@
       <label>เครื่องจักร/ทะเบียน</label>
       <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
       <datalist id="req-machineList"></datalist>
+      <div id="req-machineWarning" style="display:none;font-size:12px;font-weight:600;color:#c62828;background:#ffebee;border-radius:8px;padding:8px 10px;margin:-6px 0 10px;"></div>
 
       <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
       <input id="req-origin" list="req-originList" placeholder="เลือกเครื่องจักรก่อน" autocomplete="off">
@@ -374,6 +407,55 @@
   </div>
 </div>
 
+<!-- ============ เสมียน 4 (ซ่อมบำรุง) ============ -->
+<div id="section-clerk4" class="role-section">
+  <h1>🔧 ซ่อมบำรุง (เสมียน 4)</h1>
+
+  <div class="tab-nav">
+    <button type="button" id="c4-tabBtn-active" class="active" onclick="c4ShowTab('active')">รายการเครื่องจักร</button>
+    <button type="button" id="c4-tabBtn-history" onclick="c4ShowTab('history')">ประวัติ</button>
+  </div>
+
+  <div id="c4-tab-active">
+    <div class="toggle-group" id="c4-filterGroup">
+      <button type="button" class="active" onclick="c4SetFilter('all', this)">ทั้งหมด</button>
+      <button type="button" onclick="c4SetFilter('พร้อมใช้', this)">พร้อมใช้</button>
+      <button type="button" onclick="c4SetFilter('กำลังซ่อม', this)">กำลังซ่อม</button>
+      <button type="button" onclick="c4SetFilter('พัง', this)">พัง</button>
+    </div>
+    <input id="c4-search" placeholder="ค้นหารหัสเครื่องจักร" oninput="c4Render()">
+    <div id="c4-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c4-tab-history" style="display:none;">
+    <div id="c4-historyList"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+</div>
+
+<!-- ============ Modal แก้ไขสถานะเครื่องจักร (เสมียน 4) ============ -->
+<div id="c4EditModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2000; align-items:center; justify-content:center; padding:16px;">
+  <div class="card" style="width:100%; max-width:360px; margin:0; border-left-color:var(--primary); max-height:90vh; overflow:auto;">
+    <h2 style="margin-top:0;" id="c4EditModal-title">แก้ไขสถานะเครื่องจักร</h2>
+    <label>สถานะ</label>
+    <select id="c4EditModal-status">
+      <option value="พร้อมใช้">พร้อมใช้</option>
+      <option value="กำลังซ่อม">กำลังซ่อม</option>
+      <option value="พัง">พัง</option>
+    </select>
+    <label>สถานที่ซ่อม</label>
+    <input id="c4EditModal-location" placeholder="เช่น อู่ ก. / หน้างาน">
+    <label>วันที่เริ่มซ่อม</label>
+    <input id="c4EditModal-start" type="date">
+    <label>วันที่คาดว่าจะเสร็จ</label>
+    <input id="c4EditModal-eta" type="date">
+    <label>หมายเหตุ</label>
+    <textarea id="c4EditModal-note" rows="2"></textarea>
+    <div class="card-actions">
+      <button type="button" class="secondary" onclick="c4CloseModal()">ยกเลิก</button>
+      <button type="button" class="success" onclick="c4SubmitModal()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ Modal แก้ไขวันที่/เวลาย้ายเสร็จ (ใช้เลือกวันที่-เวลาแทนการพิมพ์เอง กันกรอกผิด) ============ -->
 <div id="editDateTimeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2000; align-items:center; justify-content:center; padding:16px;">
   <div class="card" style="width:100%; max-width:320px; margin:0; border-left-color:var(--primary);">
@@ -396,6 +478,7 @@
   // ==========================================================
 
   var CURRENT_USER = null;
+  var CURRENT_ROLES = []; // เก็บ roles ล่าสุดจาก whoAmI ไว้ใช้ตอนกด "กลับเมนูหลัก" จากหน้าที่ใช้ร่วมกันทุกบทบาท
 
   // ---------------------------------------------------------------------------------
   // LINE iOS in-app browser (WebKit) ปฏิเสธการอ่าน response จาก fetch() แบบ cors-mode
@@ -502,6 +585,12 @@
     listSitesReviewed: 'sitesReviewed',
     listPjBacklog: 'pjBacklog',
     listPendingAudit: 'pendingAudit',
+    // ---- ตรวจสอบเครื่องจักร + รายงานหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ----
+    getMachineStatus: 'machineStatus',
+    getSiteMachineReport: 'siteMachineReport',
+    // ---- เสมียน4 (ซ่อมบำรุงเครื่องจักร) ----
+    listMachinesForMaintenance: 'maintenanceList',
+    listMaintenanceHistory: 'maintenanceHistory',
     // ---- ประวัติย้อนหลัง (แยก action ต่างหากจากคิวงานปัจจุบัน ไม่ต้องโหลดทุกครั้ง) ----
     listApprovalHistory: 'approvalHistory',
     listDriverHistory: 'driverHistory',
@@ -523,6 +612,7 @@
     issuePjNumber: 'issuePjNumber',
     closeJob: 'closeJob',
     markSiteReviewed: 'markSiteReviewed',
+    updateMachineMaintenance: 'updateMachineMaintenance',
     // ---- หยุดใช้งานเครื่องจักร + รายงานค่าเช่า (feature: คำนวณค่าเช่าเครื่องจักร) ----
     requestPause: 'requestPause',
     listMyPauses: 'myPauses',
@@ -546,6 +636,10 @@
     listSitesReviewed: [],
     listPjBacklog: ['userId'],
     listPendingAudit: ['userId'],
+    getMachineStatus: ['machineCode'],
+    getSiteMachineReport: ['asOf'],
+    listMachinesForMaintenance: ['userId'],
+    listMaintenanceHistory: ['userId'],
     listApprovalHistory: ['userId'],
     listDriverHistory: ['userId'],
     listRequestHistory: ['userId'],
@@ -562,6 +656,7 @@
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
     markSiteReviewed: ['userId', 'siteName', 'note'],
+    updateMachineMaintenance: ['userId', 'machineCode', 'patch'],
     requestPause: ['userId', 'payload'],
     listMyPauses: ['userId'],
     reportResume: ['userId', 'pauseId', 'resumeDate'],
@@ -653,7 +748,8 @@
     'คนขับ': 'section-driver',
     'เสมียน1': 'section-clerk1',
     'เสมียน2': 'section-clerk2',
-    'เสมียน3': 'section-clerk3'
+    'เสมียน3': 'section-clerk3',
+    'เสมียน4': 'section-clerk4'
   };
   var ROLE_LABEL = {
     'ช่างคุมงาน': '📋 ขอย้ายเครื่องจักร',
@@ -661,7 +757,8 @@
     'คนขับ': '🚚 คิวงาน',
     'เสมียน1': '🗂 ภาพรวม',
     'เสมียน2': '🔢 ออกเลข PJ',
-    'เสมียน3': '🧾 ตรวจสอบ/ปิดงาน'
+    'เสมียน3': '🧾 ตรวจสอบ/ปิดงาน',
+    'เสมียน4': '🔧 ซ่อมบำรุง'
   };
 
   async function initApp() {
@@ -686,8 +783,28 @@
         document.getElementById('not-registered').style.display = 'block';
         return;
       }
+      // เดิมไม่เช็ค info.active เลย ทำให้บัญชีที่ถูกปิดใช้งาน (สถานะ Inactive ในชีต) ยังเห็นเมนูปกติทุกอย่าง
+      // ทั้งที่กดใช้งานจริงจะโดนเซิร์ฟเวอร์บล็อกทีหลัง (error "บัญชีนี้ถูกปิดใช้งาน") - แก้ให้บล็อกตั้งแต่หน้าแรกเลย
+      if (info.active === false) {
+        document.getElementById('not-registered').innerHTML =
+          'บัญชี LINE นี้ถูกปิดใช้งาน (สถานะ: ' + (info.status || 'Inactive') + ')<br>กรุณาแจ้งเสมียน 1 หากต้องการเปิดใช้งานอีกครั้ง';
+        document.getElementById('not-registered').style.display = 'block';
+        return;
+      }
+      CURRENT_ROLES = info.roles;
       showRoleSwitcher(info.roles);
-      showRoleSection(info.roles[0]);
+      document.getElementById('shared-nav').style.display = 'flex';
+
+      // รองรับ deep link จาก Rich Menu เช่น ?tab=lookup / ?tab=report เปิดหน้าที่ต้องการทันที
+      // (ปุ่ม Rich Menu ใช้เมนูเดียวกันหมดทุกบทบาท เลยลิงก์ไปหน้าที่ทุกบทบาทเห็นเหมือนกันได้)
+      var tabParam = new URLSearchParams(location.search).get('tab');
+      if (tabParam === 'lookup') {
+        showSharedSection('section-lookup');
+      } else if (tabParam === 'report') {
+        showSharedSection('section-report');
+      } else {
+        showRoleSection(info.roles[0]);
+      }
     } catch (err) {
       hideLoadingOverlay();
       var diag = 'ขั้นตอนที่พัง: ' + stage + '<br>' +
@@ -713,11 +830,15 @@
     }).join('');
   }
 
-  function switchRole(role, btn) {
-    Object.keys(ROLE_SECTION).forEach(function (r) {
-      var id = ROLE_SECTION[r];
-      if (id) document.getElementById(id).style.display = 'none';
+  /** ซ่อนทุก section (บทบาท + หน้าที่ใช้ร่วมกันทุกบทบาทอย่างตรวจสอบเครื่องจักร/รายงาน) ก่อนสลับไปหน้าใหม่เสมอ */
+  function hideAllSections() {
+    Array.prototype.forEach.call(document.querySelectorAll('.role-section'), function (el) {
+      el.style.display = 'none';
     });
+  }
+
+  function switchRole(role, btn) {
+    hideAllSections();
     Array.prototype.forEach.call(btn.parentNode.querySelectorAll('button'), function (b) {
       b.classList.remove('active');
     });
@@ -728,6 +849,7 @@
   function showRoleSection(role) {
     var id = ROLE_SECTION[role];
     if (!id) return;
+    hideAllSections();
     document.getElementById(id).style.display = 'block';
     if (id === 'section-request') { reqInit(); }
     if (id === 'section-approve') { aprInit(); }
@@ -735,6 +857,27 @@
     if (id === 'section-clerk1') { c1Init(); }
     if (id === 'section-clerk2') { c2Init(); }
     if (id === 'section-clerk3') { c3Init(); }
+    if (id === 'section-clerk4') { c4Init(); }
+  }
+
+  /** เปิดหน้าที่ใช้ร่วมกันทุกบทบาท (ตรวจสอบเครื่องจักร/รายงานหน้างาน) - เรียกจากปุ่มแถบ shared-nav หรือ ?tab= */
+  function showSharedSection(id) {
+    hideAllSections();
+    document.getElementById(id).style.display = 'block';
+    if (id === 'section-lookup') { lookupInit(); }
+    if (id === 'section-report') { reportInit(); }
+  }
+
+  /** ปุ่ม "กลับเมนูหลัก" ในหน้าที่ใช้ร่วมกันทุกบทบาท - กลับไปโชว์บทบาทแรกของ user คนนี้เหมือนตอนเพิ่ง login */
+  function backToRoleHome() {
+    if (CURRENT_ROLES && CURRENT_ROLES.length) {
+      showRoleSection(CURRENT_ROLES[0]);
+      var firstBtn = document.querySelector('#role-switcher button');
+      if (firstBtn) {
+        Array.prototype.forEach.call(document.querySelectorAll('#role-switcher button'), function (b) { b.classList.remove('active'); });
+        firstBtn.classList.add('active');
+      }
+    }
   }
 
   /* ============================= ช่างคุมงาน: ขอย้ายเครื่องจักร ============================= */
@@ -780,6 +923,25 @@
     if (isNaN(d.getTime())) return '';
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  /** yyyy-mm-dd (ค่าจาก <input type="date">) -> dd/MM/yyyy (รูปแบบที่ backend เก็บ) หรือ '' ถ้าว่าง/ผิดรูปแบบ */
+  function isoToThaiDate_(val) {
+    if (!val) return '';
+    var m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    return m[3] + '/' + m[2] + '/' + m[1];
+  }
+
+  /** dd/MM/yyyy -> yyyy-mm-dd (เอาไว้เติมกลับเข้า <input type="date">) หรือ '' ถ้าว่าง/ผิดรูปแบบ
+   *  ใช้ regex ตรงๆ แทน new Date() เพราะคอลัมน์ซ่อมบำรุงเป็นคอลัมน์ข้อความล้วน (dd/MM/yyyy) เสมอ
+   *  ไม่ใช่เซลล์วันที่จริง (ดูคอมเมนต์ formatDateTH_ ด้านบนเรื่องปัญหา new Date() ตีความ slash ผิด) */
+  function thaiDateToIso_(val) {
+    if (!val) return '';
+    var m = String(val).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!m) return '';
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return m[3] + '-' + pad(parseInt(m[2], 10)) + '-' + pad(parseInt(m[1], 10));
   }
 
   function reqMachineLabel_(m) {
@@ -930,6 +1092,15 @@
           var m = reqMachineByLabel[this.value];
           reqSelectedMachine = m || null;
           document.getElementById('req-origin').value = m ? m.currentSite : '';
+          // เตือน (ไม่บล็อก) ถ้าเครื่องที่เลือกไม่พร้อมใช้งาน (feature: เสมียน4 ซ่อมบำรุง) - ตามที่ตกลงกันไว้
+          // ว่ายังให้เลือกได้เผื่อมีเคสต้องย้ายเครื่องที่พัง/กำลังซ่อมไปอู่ซ่อม แค่ขึ้นเตือนให้ระวัง
+          var warnEl = document.getElementById('req-machineWarning');
+          if (m && m.maintStatus && m.maintStatus !== 'พร้อมใช้') {
+            warnEl.textContent = '⚠️ เครื่องจักรนี้สถานะ "' + m.maintStatus + '" อยู่ กรุณาตรวจสอบก่อนขอย้าย';
+            warnEl.style.display = 'block';
+          } else {
+            warnEl.style.display = 'none';
+          }
         });
       }
     });
@@ -975,6 +1146,7 @@
     document.getElementById('req-destination').value = '';
     document.getElementById('req-wantedDate').value = '';
     document.getElementById('req-note').value = '';
+    document.getElementById('req-machineWarning').style.display = 'none';
     reqSelectedMachine = null;
     reqSetUrgency(false);
   }
@@ -1683,6 +1855,200 @@
           '</div>';
       }).join('');
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  /* ============================= ตรวจสอบเครื่องจักร (ทุกบทบาทเห็นเหมือนกัน) ============================= */
+  var lookupMachines = [];
+  var lookupMachineByLabel = {};
+  var lookupListenerAttached_ = false;
+
+  function lookupInit() {
+    callServer('getMachineList').then(function (list) {
+      lookupMachines = list;
+      lookupMachineByLabel = {};
+      var dl = document.getElementById('lku-machineList');
+      dl.innerHTML = '';
+      list.forEach(function (m) {
+        var label = reqMachineLabel_(m);
+        lookupMachineByLabel[label] = m;
+        var opt = document.createElement('option');
+        opt.value = label;
+        dl.appendChild(opt);
+      });
+      if (!lookupListenerAttached_) {
+        lookupListenerAttached_ = true;
+        document.getElementById('lku-machineInput').addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') lookupSearch();
+        });
+      }
+    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function lookupSearch() {
+    var val = document.getElementById('lku-machineInput').value.trim();
+    var m = lookupMachineByLabel[val];
+    var code = m ? m.code : val;
+    if (!code) return showToast('กรุณาพิมพ์รหัสเครื่องจักร');
+    document.getElementById('lku-result').innerHTML = '<div class="loading">กำลังค้นหา...</div>';
+    callServer('getMachineStatus', code).then(function (r) {
+      var isReady = !r.maintStatus || r.maintStatus === 'พร้อมใช้';
+      document.getElementById('lku-result').innerHTML =
+        '<div class="card">' +
+        '<div class="machine-value">🚜 ' + r.code + (r.type ? ' (' + r.type + ')' : '') + '</div>' +
+        '<span class="badge ' + (isReady ? 'status-moved' : 'status-rejected') + '">' + (r.maintStatus || 'พร้อมใช้') + '</span>' +
+        '<div class="row"><span class="label">หน้างานปัจจุบัน</span><span>' + (r.currentSite || '-') + '</span></div>' +
+        '<div class="row"><span class="label">ย้ายเข้าวันที่</span><span>' + (r.movedInDate || '-') + '</span></div>' +
+        '<div class="row"><span class="label">อยู่มาแล้ว</span><span>' + (r.daysAtSite != null ? r.daysAtSite + ' วัน' : '-') + '</span></div>' +
+        (!isReady ? (
+          '<div class="row"><span class="label">สถานที่ซ่อม</span><span>' + (r.repairLocation || '-') + '</span></div>' +
+          '<div class="row"><span class="label">เริ่มซ่อม</span><span>' + (r.repairStart || '-') + '</span></div>' +
+          '<div class="row"><span class="label">คาดว่าจะเสร็จ</span><span>' + (r.repairEta || '-') + '</span></div>'
+        ) : '') +
+        '</div>';
+    }).catch(function (err) {
+      document.getElementById('lku-result').innerHTML = '<div class="empty">ไม่พบเครื่องจักรนี้ (' + err + ')</div>';
+    });
+  }
+
+  /* ============================= รายงานเครื่องจักรตามหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ============================= */
+  function reportInit() {
+    document.getElementById('rpt-date').value = '';
+    reportLoad();
+  }
+
+  function reportLoad() {
+    var asOf = isoToThaiDate_(document.getElementById('rpt-date').value); // '' ถ้าไม่เลือก = ข้อมูลปัจจุบัน
+    document.getElementById('rpt-result').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+    callServer('getSiteMachineReport', asOf).then(function (r) {
+      var html = '<div style="font-size:12px;color:#888;margin-bottom:8px;">ข้อมูล ณ วันที่ ' + (r.asOf || '-') + '</div>';
+      if (!r.sites.length) {
+        html += '<div class="empty">ไม่มีข้อมูล</div>';
+      } else {
+        html += r.sites.map(function (s) {
+          return '<div class="card">' +
+            '<div class="machine-value">📍 ' + s.site + ' (' + s.machines.length + ' คัน)</div>' +
+            s.machines.map(function (m) {
+              var notReady = m.maintStatus && m.maintStatus !== 'พร้อมใช้';
+              return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
+                (notReady ? '<span class="badge status-rejected">' + m.maintStatus + '</span>' : '') +
+                '</div>';
+            }).join('') +
+            '</div>';
+        }).join('');
+      }
+      if (r.noHistory && r.noHistory.length) {
+        html += '<h2>ไม่มีประวัติก่อนวันที่เลือก</h2><div class="card">' +
+          r.noHistory.map(function (m) { return m.code + (m.type ? ' (' + m.type + ')' : ''); }).join(', ') +
+          '</div>';
+      }
+      document.getElementById('rpt-result').innerHTML = html;
+    }).catch(function (err) {
+      document.getElementById('rpt-result').innerHTML = '<div class="empty">ผิดพลาด: ' + err + '</div>';
+    });
+  }
+
+  /* ============================= เสมียน 4 (ซ่อมบำรุง) ============================= */
+  var c4Machines = [];
+  var c4Filter = 'all';
+  var c4EditingCode = null;
+
+  function c4Init() { c4LoadList(); }
+
+  function c4ShowTab(tab) {
+    document.getElementById('c4-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c4-tabBtn-history').classList.toggle('active', tab === 'history');
+    document.getElementById('c4-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c4-tab-history').style.display = tab === 'history' ? 'block' : 'none';
+    if (tab === 'active') c4LoadList(); else c4LoadHistory();
+  }
+
+  function c4LoadList() {
+    document.getElementById('c4-list').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+    callServer('listMachinesForMaintenance', CURRENT_USER.userId).then(function (rows) {
+      c4Machines = rows;
+      c4Render();
+    }).catch(function (err) { document.getElementById('c4-list').innerHTML = '<div class="empty">ผิดพลาด: ' + err + '</div>'; });
+  }
+
+  function c4SetFilter(f, btn) {
+    c4Filter = f;
+    Array.prototype.forEach.call(document.querySelectorAll('#c4-filterGroup button'), function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    c4Render();
+  }
+
+  function c4Render() {
+    var q = document.getElementById('c4-search').value.trim().toLowerCase();
+    var list = c4Machines.filter(function (m) {
+      if (c4Filter !== 'all' && m.maintStatus !== c4Filter) return false;
+      if (q && m.code.toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+    var el = document.getElementById('c4-list');
+    if (!list.length) { el.innerHTML = '<div class="empty">ไม่มีรายการ</div>'; return; }
+    el.innerHTML = list.map(function (m) {
+      var badgeClass = m.maintStatus === 'พัง' ? 'status-rejected' : (m.maintStatus === 'กำลังซ่อม' ? 'status-pending' : 'status-moved');
+      return '<div class="card">' +
+        '<div class="machine-value">🚜 ' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</div>' +
+        '<span class="badge ' + badgeClass + '">' + m.maintStatus + '</span>' +
+        '<div class="row"><span class="label">หน้างานปัจจุบัน</span><span>' + (m.currentSite || '-') + '</span></div>' +
+        (m.maintStatus !== 'พร้อมใช้' ? (
+          '<div class="row"><span class="label">สถานที่ซ่อม</span><span>' + (m.repairLocation || '-') + '</span></div>' +
+          '<div class="row"><span class="label">เริ่มซ่อม</span><span>' + (m.repairStart || '-') + '</span></div>' +
+          '<div class="row"><span class="label">คาดว่าจะเสร็จ</span><span>' + (m.repairEta || '-') + '</span></div>'
+        ) : '') +
+        '<div class="card-actions"><button class="secondary" onclick="c4OpenModal(\'' + m.code + '\')">แก้ไขสถานะ</button></div>' +
+        '</div>';
+    }).join('');
+  }
+
+  function c4OpenModal(code) {
+    var m = c4Machines.filter(function (x) { return x.code === code; })[0];
+    if (!m) return;
+    c4EditingCode = code;
+    document.getElementById('c4EditModal-title').textContent = 'แก้ไขสถานะ: ' + code;
+    document.getElementById('c4EditModal-status').value = m.maintStatus || 'พร้อมใช้';
+    document.getElementById('c4EditModal-location').value = m.repairLocation || '';
+    document.getElementById('c4EditModal-start').value = thaiDateToIso_(m.repairStart);
+    document.getElementById('c4EditModal-eta').value = thaiDateToIso_(m.repairEta);
+    document.getElementById('c4EditModal-note').value = m.repairNote || '';
+    document.getElementById('c4EditModal').style.display = 'flex';
+  }
+
+  function c4CloseModal() {
+    document.getElementById('c4EditModal').style.display = 'none';
+    c4EditingCode = null;
+  }
+
+  function c4SubmitModal() {
+    if (!c4EditingCode) return;
+    var patch = {
+      maintStatus: document.getElementById('c4EditModal-status').value,
+      repairLocation: document.getElementById('c4EditModal-location').value,
+      repairStart: isoToThaiDate_(document.getElementById('c4EditModal-start').value),
+      repairEta: isoToThaiDate_(document.getElementById('c4EditModal-eta').value),
+      repairNote: document.getElementById('c4EditModal-note').value
+    };
+    callServer('updateMachineMaintenance', CURRENT_USER.userId, c4EditingCode, patch)
+      .then(function () { showToast('บันทึกแล้ว'); c4CloseModal(); c4LoadList(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  function c4LoadHistory() {
+    document.getElementById('c4-historyList').innerHTML = '<div class="loading">กำลังโหลด...</div>';
+    callServer('listMaintenanceHistory', CURRENT_USER.userId).then(function (rows) {
+      var el = document.getElementById('c4-historyList');
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+      el.innerHTML = rows.map(function (r) {
+        return '<div class="card">' +
+          '<div class="machine-value">🚜 ' + r['เครื่องจักร/ทะเบียน'] + '</div>' +
+          '<div class="row"><span class="label">สถานะ</span><span>' + r['สถานะเดิม'] + ' → ' + r['สถานะใหม่'] + '</span></div>' +
+          '<div class="row"><span class="label">บันทึกเมื่อ</span><span>' + r['วันที่บันทึก'] + '</span></div>' +
+          '<div class="row"><span class="label">โดย</span><span>' + r['ผู้บันทึก'] + '</span></div>' +
+          (r['หมายเหตุ'] ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + r['หมายเหตุ'] + '</span></div>' : '') +
+          '</div>';
+      }).join('');
+    }).catch(function (err) { document.getElementById('c4-historyList').innerHTML = '<div class="empty">ผิดพลาด: ' + err + '</div>'; });
   }
 
   initApp();
