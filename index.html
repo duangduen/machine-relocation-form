@@ -961,6 +961,10 @@
   function reqMachineLabel_(m) {
     return m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
   }
+  /** label แบบสั้น ไม่ใส่ชื่อหน้างาน (ใช้ในหน้าตรวจสอบเครื่องจักร กันชื่อยาวเกินไป) */
+  function lookupMachineLabel_(m) {
+    return m.code + (m.subtype ? ' (' + m.subtype + ')' : '');
+  }
   function reqSiteLabel_(s) {
     return (s.code ? s.code + ' - ' : '') + s.name;
   }
@@ -1883,7 +1887,7 @@
       var dl = document.getElementById('lku-machineList');
       dl.innerHTML = '';
       list.forEach(function (m) {
-        var label = reqMachineLabel_(m);
+        var label = lookupMachineLabel_(m);
         lookupMachineByLabel[label] = m;
         var opt = document.createElement('option');
         opt.value = label;
@@ -1962,8 +1966,10 @@
           '<div class="machine-value">📍 ' + s.site + ' (' + s.machines.length + ' คัน)</div>' +
           s.machines.map(function (m) {
             var status = m.maintStatus || 'พร้อมใช้';
+            var daysBadge = (m.daysAtSite != null) ?
+              '<span class="badge" style="background:#eef1f5;color:#555;">' + m.daysAtSite + ' วัน</span>' : '';
             return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
-              '<span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span>' +
+              '<span>' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span></span>' +
               '</div>';
           }).join('') +
           '</div>';
