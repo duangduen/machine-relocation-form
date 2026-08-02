@@ -425,6 +425,7 @@
       <button type="button" onclick="c4SetFilter('พร้อมใช้', this)">พร้อมใช้</button>
       <button type="button" onclick="c4SetFilter('กำลังซ่อม', this)">กำลังซ่อม</button>
       <button type="button" onclick="c4SetFilter('พัง', this)">พัง</button>
+      <button type="button" onclick="c4SetFilter('ขายแล้ว', this)">ขายแล้ว</button>
     </div>
     <input id="c4-search" placeholder="ค้นหารหัสเครื่องจักร" oninput="c4Render()">
     <div id="c4-list"><div class="loading">กำลังโหลด...</div></div>
@@ -443,6 +444,7 @@
       <option value="พร้อมใช้">พร้อมใช้</option>
       <option value="กำลังซ่อม">กำลังซ่อม</option>
       <option value="พัง">พัง</option>
+      <option value="ขายแล้ว">ขายแล้ว</option>
     </select>
     <label>สถานที่ซ่อม</label>
     <input id="c4EditModal-location" placeholder="เช่น อู่ ก. / หน้างาน">
@@ -952,6 +954,7 @@
   function maintStatusBadgeClass_(status) {
     if (status === 'พัง') return 'status-rejected';
     if (status === 'กำลังซ่อม') return 'status-pending';
+    if (status === 'ขายแล้ว') return 'status-cancelled'; // สีเทา - เครื่องขายไปแล้ว ไม่ใช่สถานะซ่อมบำรุงปกติ
     return 'status-moved';
   }
 
