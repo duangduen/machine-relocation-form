@@ -550,8 +550,8 @@
 
       var timer = setTimeout(function () {
         cleanup();
-        reject(new Error('การเชื่อมต่อช้าเกินไป (รอเกิน 25 วิ) ระบบอาจบันทึกไปแล้วหรือยังก็ได้ กรุณาตรวจสอบก่อนลองใหม่'));
-      }, 25000);
+        reject(new Error('การเชื่อมต่อช้าเกินไป (รอเกิน 45 วิ) ระบบมักบันทึกสำเร็จไปแล้วฝั่งเซิร์ฟเวอร์ (เช็คได้จาก Telegram/แท็บประวัติ) กรุณาเช็คก่อนกดซ้ำ'));
+      }, 45000);
 
       function cleanup() {
         clearTimeout(timer);
@@ -1501,18 +1501,57 @@
       '<button class="success" onclick="drvSubmitMoved(\'' + id + '\')">ยืนยันย้ายเสร็จ (เวลาปัจจุบัน)</button>';
   }
 
+  /**
+   * ย่อรูปก่อนแปลงเป็น base64 ส่งขึ้นเซิร์ฟเวอร์ (แก้ปัญหา "ยืนยันย้ายเสร็จ" ค้าง/ขึ้น error
+   * ทั้งที่จริงๆ บันทึกสำเร็จแล้ว - ดู notifyMoved_ ที่ยิง Telegram ไปแล้ว) สาเหตุคือรูปจากกล้องมือถือ
+   * มักมีขนาด 3-10MB ต่อไฟล์ พอแปลงเป็น base64 (ยาวขึ้น ~33%) แล้วส่งผ่านฟอร์มซ่อน จะใช้เวลานานมาก
+   * บนเน็ตมือถือที่หน้างาน จนเกิน timeout ฝั่ง client (25 วิ) ทั้งที่เซิร์ฟเวอร์ยังทำงานต่อจนเสร็จอยู่ดี
+   * ย่อเหลือด้านยาวสุดไม่เกิน 1280px + บีบอัดเป็น JPEG คุณภาพ 0.7 ทำให้ไฟล์เล็กลงมาก (ปกติเหลือหลักร้อย KB)
+   * ยังพอเห็นรายละเอียดหลักฐานชัดเจน แต่ส่งเร็วขึ้นมากพอจะไม่ชนขีดจำกัดเวลา
+   */
+  function compressImageFile_(file, maxDim, quality) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('อ่านไฟล์รูปไม่สำเร็จ')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('เปิดไฟล์รูปไม่สำเร็จ')); };
+        img.onload = function () {
+          var w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w >= h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+            else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+          }
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          var dataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve({ base64: dataUrl.split(',')[1], mimeType: 'image/jpeg', filename: (file.name || 'photo') + '.jpg' });
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   function drvSubmitMoved(id) {
     var fileInput = document.getElementById('drv-photo-' + id);
     var file = fileInput.files[0];
 
     if (!file) { drvDoSubmitMoved(id, null); return; }
 
-    var reader = new FileReader();
-    reader.onload = function () {
-      var base64 = reader.result.split(',')[1];
-      drvDoSubmitMoved(id, { base64: base64, mimeType: file.type, filename: file.name });
-    };
-    reader.readAsDataURL(file);
+    showToast('กำลังเตรียมรูป...');
+    compressImageFile_(file, 1280, 0.7)
+      .then(function (photo) { drvDoSubmitMoved(id, photo); })
+      .catch(function (err) {
+        // ย่อรูปไม่สำเร็จ (เช่นเบราว์เซอร์เก่ามาก) - ยังส่งไฟล์ต้นฉบับต่อไปดีกว่าบล็อกไม่ให้บันทึกเลย
+        var reader = new FileReader();
+        reader.onload = function () {
+          drvDoSubmitMoved(id, { base64: reader.result.split(',')[1], mimeType: file.type, filename: file.name });
+        };
+        reader.readAsDataURL(file);
+      });
   }
 
   /**
