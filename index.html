@@ -158,9 +158,12 @@
   .profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255,255,255,0.9); margin: 6px 0 0; }
   .profile-row img { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); }
   .role-section { display: none; }
-  .tab-nav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 2px solid var(--border); }
+  /* เดิม button ใช้ flex:1 ทำให้ทุกแท็บถูกบีบให้กว้างเท่ากันเสมอ - พอรวมแท็บที่ใช้ร่วมกัน (ตรวจสอบเครื่องจักร/
+     รายงานหน้างาน) เข้ามาด้วย บางคนมีได้ถึง 4 แท็บ ป้ายยาวๆ จะถูกบีบจนตัวหนังสือตกบรรทัด/ล้น เปลี่ยนเป็นให้แต่ละ
+     ปุ่มกว้างตามเนื้อหา (flex:0 0 auto) แล้วให้แถบทั้งแถบเลื่อนซ้าย-ขวาได้แทนถ้าแท็บเยอะเกินความกว้างจอ */
+  .tab-nav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 2px solid var(--border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .tab-nav button {
-    flex: 1; margin: 0 0 -2px; padding: 10px 8px;
+    flex: 0 0 auto; margin: 0 0 -2px; padding: 10px 12px; white-space: nowrap;
     background: transparent; color: var(--muted); box-shadow: none;
     border-radius: 6px 6px 0 0; border-bottom: 2px solid transparent;
   }
@@ -182,13 +185,9 @@
   <div id="profile-bar"></div>
 </div>
 
+<!-- role-switcher รวมทั้งแท็บบทบาทของ user คนนี้ และ 2 แท็บที่ทุกบทบาทเห็นเหมือนกัน (ตรวจสอบเครื่องจักร/
+     รายงานหน้างาน) ไว้ในแถบเดียวกันเลย (เดิมแยกเป็นแถวปุ่ม shared-nav ต่างหาก กินพื้นที่จอมือถือเพิ่มอีกแถว) -->
 <div id="role-switcher" class="tab-nav" style="display:none;"></div>
-
-<!-- ปุ่มที่ทุกบทบาทเห็นเหมือนกันหมด (ไม่ผูกกับ role-section) - ใช้คู่กับ Rich Menu เมนูเดียวที่ใช้ร่วมทุกบทบาท -->
-<div id="shared-nav" style="display:none; gap:8px; margin-bottom:14px;">
-  <button type="button" class="secondary" style="flex:1;" onclick="showSharedSection('section-lookup')">🔍 ตรวจสอบเครื่องจักร</button>
-  <button type="button" class="secondary" style="flex:1;" onclick="showSharedSection('section-report')">📊 รายงานหน้างาน</button>
-</div>
 
 <div id="not-registered" class="card" style="display:none;"></div>
 
@@ -816,7 +815,7 @@
         // 1) คนงานเปิดแอปครั้งแรก เห็น ID ตัวเอง กดคัดลอกส่งให้แอดมิน 2) แอดมินเพิ่มแถวในชีต "สิทธิ์ผู้ใช้งาน"
         document.getElementById('not-registered').innerHTML =
           '<div style="margin-bottom:10px;">บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>' +
-          'กรุณาคัดลอกรหัสด้านล่าง แล้วส่งให้เสมียน1/แอดมิน พร้อมชื่อ-นามสกุลและตำแหน่งของคุณ เพื่อเพิ่มชื่อในระบบ</div>' +
+          'กรุณาคัดลอกรหัสด้านล่าง แล้วส่งกลับให้บัญชี SP ย้ายเครื่องจักร นี้ พร้อมชื่อ-นามสกุลและตำแหน่งของคุณ เพื่อเพิ่มชื่อในระบบ</div>' +
           '<div style="font-family:monospace;font-size:13px;background:#f5f5f5;border-radius:8px;padding:8px 10px;word-break:break-all;margin-bottom:8px;">' +
           profile.userId + '</div>' +
           '<button type="button" onclick="copyRegisterId_(\'' + profile.userId + '\', this)">📋 คัดลอกรหัส</button>';
@@ -833,15 +832,19 @@
       }
       CURRENT_ROLES = info.roles;
       showRoleSwitcher(info.roles);
-      document.getElementById('shared-nav').style.display = 'flex';
 
       // รองรับ deep link จาก Rich Menu เช่น ?tab=lookup / ?tab=report เปิดหน้าที่ต้องการทันที
       // (ปุ่ม Rich Menu ใช้เมนูเดียวกันหมดทุกบทบาท เลยลิงก์ไปหน้าที่ทุกบทบาทเห็นเหมือนกันได้)
+      // ต้องอัปเดต active class ในแถบแท็บให้ตรงด้วย ไม่งั้นแท็บของบทบาทแรก (i===0) จะค้างไฮไลต์อยู่ผิดๆ
       var tabParam = new URLSearchParams(location.search).get('tab');
-      if (tabParam === 'lookup') {
-        showSharedSection('section-lookup');
-      } else if (tabParam === 'report') {
-        showSharedSection('section-report');
+      var targetSection = tabParam === 'lookup' ? 'section-lookup' : (tabParam === 'report' ? 'section-report' : null);
+      if (targetSection) {
+        showSharedSection(targetSection);
+        var targetBtn = document.querySelector('#role-switcher button[data-section="' + targetSection + '"]');
+        if (targetBtn) {
+          Array.prototype.forEach.call(document.querySelectorAll('#role-switcher button'), function (b) { b.classList.remove('active'); });
+          targetBtn.classList.add('active');
+        }
       } else {
         showRoleSection(info.roles[0]);
       }
@@ -859,15 +862,34 @@
     }
   }
 
-  /** ถ้า user มีมากกว่า 1 บทบาท โชว์แถบสลับเมนูด้านบน (ใช้สไตล์เดียวกับ .tab-nav) */
+  /** โชว์แถบแท็บด้านบน รวมทั้งแท็บบทบาทของ user คนนี้ (อาจมีหลายบทบาท) และ 2 แท็บที่ทุกบทบาทเห็นเหมือนกันต่อท้าย
+   *  เสมอ (ตรวจสอบเครื่องจักร/รายงานหน้างาน) - เดิมสองอันนี้แยกเป็นแถวปุ่มต่างหาก (shared-nav) กินพื้นที่จอมือถือ
+   *  เพิ่มอีกแถว รวมเป็นแถบเดียวกันให้ประหยัดพื้นที่กว่า ใช้ data-attribute บอกว่าปุ่มไหนเป็นบทบาท/หน้าที่ใช้ร่วมกัน
+   *  แสดงแถบนี้เสมอแม้มีแค่บทบาทเดียว (เพราะยังต้องมีที่ให้กดกลับมาจาก 2 แท็บที่ใช้ร่วมกันได้) */
   function showRoleSwitcher(roles) {
     var bar = document.getElementById('role-switcher');
-    if (roles.length <= 1) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    bar.innerHTML = roles.map(function (r, i) {
-      return '<button type="button" class="' + (i === 0 ? 'active' : '') + '" onclick="switchRole(\'' + r + '\', this)">' +
+    var html = roles.map(function (r, i) {
+      return '<button type="button" class="' + (i === 0 ? 'active' : '') + '" data-kind="role" data-role="' + r + '" onclick="switchTab_(this)">' +
         (ROLE_LABEL[r] || r) + '</button>';
     }).join('');
+    html += '<button type="button" data-kind="shared" data-section="section-lookup" onclick="switchTab_(this)">🔍 ตรวจสอบเครื่องจักร</button>';
+    html += '<button type="button" data-kind="shared" data-section="section-report" onclick="switchTab_(this)">📊 รายงานหน้างาน</button>';
+    bar.innerHTML = html;
+  }
+
+  /** ตัวจัดการกลางของทุกปุ่มในแถบแท็บ (role-switcher) - แยกตาม data-kind ว่าเป็นแท็บบทบาท หรือแท็บที่ใช้ร่วมกัน */
+  function switchTab_(btn) {
+    hideAllSections();
+    Array.prototype.forEach.call(btn.parentNode.querySelectorAll('button'), function (b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    if (btn.dataset.kind === 'role') {
+      showRoleSection(btn.dataset.role);
+    } else {
+      showSharedSection(btn.dataset.section);
+    }
   }
 
   /** ซ่อนทุก section (บทบาท + หน้าที่ใช้ร่วมกันทุกบทบาทอย่างตรวจสอบเครื่องจักร/รายงาน) ก่อนสลับไปหน้าใหม่เสมอ */
@@ -877,14 +899,6 @@
     });
   }
 
-  function switchRole(role, btn) {
-    hideAllSections();
-    Array.prototype.forEach.call(btn.parentNode.querySelectorAll('button'), function (b) {
-      b.classList.remove('active');
-    });
-    btn.classList.add('active');
-    showRoleSection(role);
-  }
 
   function showRoleSection(role) {
     var id = ROLE_SECTION[role];
