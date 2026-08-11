@@ -477,6 +477,7 @@
   // ============ ตั้งค่าที่ต้องแก้ก่อนใช้งานจริง ============
   const LIFF_ID = '2010592933-J3nNOO6d';
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBTyeA3r7bwqqPi-d9ONKI_aAGkElFLKqOkCP2dWLYog0wgfzSGlNuTd9px81KnEjY/exec'; // TODO: อัปเดตหลัง deploy เวอร์ชันใหม่ (JSON API)
+  const TELEGRAM_BOT_USERNAME = 'sp_machinetran_bot'; // ใช้ทำปุ่ม "เปิด Telegram" (t.me/<username>)
   // ==========================================================
 
   var CURRENT_USER = null;
@@ -753,6 +754,19 @@
     document.body.removeChild(ta);
   }
 
+  /** เปิดแชท Telegram กับบอทของระบบ (สำหรับคนที่อยากรับแจ้งเตือนผ่าน Telegram ด้วย)
+   *  ใช้ liff.openWindow({ external: true }) แทน window.open() ธรรมดา เพราะหน้านี้รันอยู่ใน LINE in-app
+   *  webview - external:true จะสั่งเปิดผ่านเบราว์เซอร์/แอปภายนอกของเครื่อง (ให้ระบบเลือกเปิดแอป Telegram
+   *  อัตโนมัติถ้าลงไว้) แทนที่จะเปิดค้างอยู่ใน webview เดิมซึ่งบางเครื่องจะเปิด Telegram ไม่ได้เลย */
+  function openTelegram_() {
+    var url = 'https://t.me/' + TELEGRAM_BOT_USERNAME;
+    if (window.liff && liff.isInClient && liff.isInClient()) {
+      liff.openWindow({ url: url, external: true });
+    } else {
+      window.open(url, '_blank');
+    }
+  }
+
   function statusBadgeClass(status) {
     var map = {
       'รออนุมัติ': 'status-pending',
@@ -803,7 +817,8 @@
       CURRENT_USER = profile;
       document.getElementById('profile-bar').innerHTML =
         '<div class="profile-row"><img src="' + (profile.pictureUrl || '') + '" onerror="this.style.display=\'none\'">' +
-        '<span>เข้าสู่ระบบเป็น: <strong>' + profile.displayName + '</strong></span></div>';
+        '<span>เข้าสู่ระบบเป็น: <strong>' + profile.displayName + '</strong></span>' +
+        '<button type="button" onclick="openTelegram_()" style="margin-left:auto;flex-shrink:0;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:5px 10px;font-size:12px;">💬 เปิด Telegram</button></div>';
 
       stage = 'whoAmI (backend API)';
       var info = await callServer('whoAmI', profile.userId);
