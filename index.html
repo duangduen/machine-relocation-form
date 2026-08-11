@@ -190,9 +190,7 @@
   <button type="button" class="secondary" style="flex:1;" onclick="showSharedSection('section-report')">📊 รายงานหน้างาน</button>
 </div>
 
-<div id="not-registered" class="card" style="display:none;">
-  บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>กรุณาแจ้งเสมียน 1 เพื่อเพิ่มชื่อในระบบ
-</div>
+<div id="not-registered" class="card" style="display:none;"></div>
 
 <!-- ============ ตรวจสอบเครื่องจักร (ทุกบทบาทเห็นเหมือนกัน) ============ -->
 <div id="section-lookup" class="role-section">
@@ -729,6 +727,33 @@
     window.__toastTimer = setTimeout(function () { el.style.display = 'none'; }, 3000);
   }
 
+  /** คัดลอก LINE User ID ของผู้ใช้ที่ยังไม่ได้ลงทะเบียน (หน้า not-registered) ไปไว้ในคลิปบอร์ด
+   *  ใช้ navigator.clipboard ถ้ามี (เบราว์เซอร์/เวอร์ชัน LINE ใหม่ๆ) ถ้าไม่มีให้ fallback เป็นการเลือกข้อความ
+   *  ใน textarea ชั่วคราวแล้วสั่ง copy แบบเก่า (execCommand) กันเคสเบราว์เซอร์เก่าไม่รองรับ Clipboard API */
+  function copyRegisterId_(id, btn) {
+    function done() {
+      var original = btn.textContent;
+      btn.textContent = '✅ คัดลอกแล้ว';
+      setTimeout(function () { btn.textContent = original; }, 2000);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(id).then(done).catch(function () { copyFallback_(id, done); });
+    } else {
+      copyFallback_(id, done);
+    }
+  }
+  function copyFallback_(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (err) { showToast('คัดลอกไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง'); }
+    document.body.removeChild(ta);
+  }
+
   function statusBadgeClass(status) {
     var map = {
       'รออนุมัติ': 'status-pending',
@@ -785,6 +810,16 @@
       var info = await callServer('whoAmI', profile.userId);
       hideLoadingOverlay();
       if (!info.registered || !info.roles || !info.roles.length) {
+        // แสดง LINE User ID ของตัวเองพร้อมปุ่มคัดลอก ให้คนที่ยังไม่ได้ลงทะเบียนกดคัดลอกส่งให้แอดมิน/เสมียน1
+        // ได้เลยทันที (ก่อนหน้านี้มีแค่ข้อความบอกว่ายังไม่ได้ลงทะเบียน ไม่มี ID ให้เอาไปใช้ต่อ ต้องไปหาทางอื่น
+        // เช่นเปิด Developer Console เอง ซึ่งคนทั่วไปทำไม่เป็น) - ใช้ขั้นตอนลงทะเบียนแบบ self-service ง่ายๆ:
+        // 1) คนงานเปิดแอปครั้งแรก เห็น ID ตัวเอง กดคัดลอกส่งให้แอดมิน 2) แอดมินเพิ่มแถวในชีต "สิทธิ์ผู้ใช้งาน"
+        document.getElementById('not-registered').innerHTML =
+          '<div style="margin-bottom:10px;">บัญชี LINE นี้ยังไม่ได้ลงทะเบียนสิทธิ์ผู้ใช้งาน<br>' +
+          'กรุณาคัดลอกรหัสด้านล่าง แล้วส่งให้เสมียน1/แอดมิน พร้อมชื่อ-นามสกุลและตำแหน่งของคุณ เพื่อเพิ่มชื่อในระบบ</div>' +
+          '<div style="font-family:monospace;font-size:13px;background:#f5f5f5;border-radius:8px;padding:8px 10px;word-break:break-all;margin-bottom:8px;">' +
+          profile.userId + '</div>' +
+          '<button type="button" onclick="copyRegisterId_(\'' + profile.userId + '\', this)">📋 คัดลอกรหัส</button>';
         document.getElementById('not-registered').style.display = 'block';
         return;
       }
@@ -958,6 +993,14 @@
     return 'status-moved';
   }
 
+  /** เช็คว่าสถานะเครื่องจักร "ไม่พร้อมใช้" หรือไม่ - ใช้แพทเทิร์นเดียวกับ maintStatusBadgeClass_ (เช็คว่า
+   *  ตรงกับสถานะที่ไม่ปกติสามแบบนี้หรือเปล่า) แทนที่จะเช็คว่า "ไม่เท่ากับพร้อมใช้" เพราะข้อมูลในชีตบางแถว
+   *  เป็นข้อความเก่าที่พิมพ์เองก่อนมีฟีเจอร์นี้ (เช่น "พร้อมใช้งาน" แทนที่จะเป็น "พร้อมใช้" เป๊ะๆ) ถ้าเช็คแบบ
+   *  !== 'พร้อมใช้' จะทำให้เครื่องที่จริงๆ พร้อมใช้งานอยู่ขึ้นเตือนผิดๆ ว่าไม่พร้อมใช้ */
+  function isMachineNotReady_(status) {
+    return status === 'พัง' || status === 'กำลังซ่อม' || status === 'ขายแล้ว';
+  }
+
   function reqMachineLabel_(m) {
     return m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
   }
@@ -1113,7 +1156,7 @@
           // เตือน (ไม่บล็อก) ถ้าเครื่องที่เลือกไม่พร้อมใช้งาน (feature: เสมียน4 ซ่อมบำรุง) - ตามที่ตกลงกันไว้
           // ว่ายังให้เลือกได้เผื่อมีเคสต้องย้ายเครื่องที่พัง/กำลังซ่อมไปอู่ซ่อม แค่ขึ้นเตือนให้ระวัง
           var warnEl = document.getElementById('req-machineWarning');
-          if (m && m.maintStatus && m.maintStatus !== 'พร้อมใช้') {
+          if (m && m.maintStatus && isMachineNotReady_(m.maintStatus)) {
             warnEl.textContent = '⚠️ เครื่องจักรนี้สถานะ "' + m.maintStatus + '" อยู่ กรุณาตรวจสอบก่อนขอย้าย';
             warnEl.style.display = 'block';
           } else {
@@ -1949,7 +1992,7 @@
     document.getElementById('lku-result').innerHTML = '<div class="loading">กำลังค้นหา...</div>';
     callServer('getMachineStatus', code).then(function (r) {
       var status = r.maintStatus || 'พร้อมใช้';
-      var isReady = status === 'พร้อมใช้';
+      var isReady = !isMachineNotReady_(status);
       document.getElementById('lku-result').innerHTML =
         '<div class="card">' +
         '<div class="machine-value">🚜 ' + r.code + (r.type ? ' (' + r.type + ')' : '') + '</div>' +
@@ -2067,7 +2110,7 @@
         '<div class="machine-value">🚜 ' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</div>' +
         '<span class="badge ' + maintStatusBadgeClass_(m.maintStatus) + '">' + m.maintStatus + '</span>' +
         '<div class="row"><span class="label">หน้างานปัจจุบัน</span><span>' + (m.currentSite || '-') + '</span></div>' +
-        (m.maintStatus !== 'พร้อมใช้' ? (
+        (isMachineNotReady_(m.maintStatus) ? (
           '<div class="row"><span class="label">สถานที่ซ่อม</span><span>' + (m.repairLocation || '-') + '</span></div>' +
           '<div class="row"><span class="label">เริ่มซ่อม</span><span>' + (m.repairStart || '-') + '</span></div>' +
           '<div class="row"><span class="label">คาดว่าจะเสร็จ</span><span>' + (m.repairEta || '-') + '</span></div>'
