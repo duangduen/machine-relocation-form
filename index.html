@@ -517,8 +517,8 @@
       var script = document.createElement('script');
       var timer = setTimeout(function () {
         cleanup();
-        reject(new Error('การเชื่อมต่อช้าเกินไป (รอเกิน 20 วิ) กรุณาลองใหม่อีกครั้ง'));
-      }, 20000);
+        reject(new Error('การเชื่อมต่อช้าเกินไป (รอเกิน 35 วิ) ระบบมักบันทึกสำเร็จไปแล้วฝั่งเซิร์ฟเวอร์ กรุณาเช็คก่อนกดซ้ำ'));
+      }, 35000);
       function cleanup() {
         clearTimeout(timer);
         delete window[cbName];
@@ -1825,7 +1825,7 @@
       var dl = document.getElementById('c1fix-machineList');
       dl.innerHTML = '';
       list.forEach(function (m) {
-        var label = reqMachineLabel_(m);
+        var label = lookupMachineLabel_(m);
         c1fixMachineByLabel_[label] = m;
         var opt = document.createElement('option');
         opt.value = label;
