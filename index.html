@@ -2136,6 +2136,7 @@
           '<div class="row"><span class="label">เริ่มซ่อม</span><span>' + (r.repairStart || '-') + '</span></div>' +
           '<div class="row"><span class="label">คาดว่าจะเสร็จ</span><span>' + (r.repairEta || '-') + '</span></div>'
         ) : '') +
+        (r.repairNote ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + r.repairNote + '</span></div>' : '') +
         '</div>';
     }).catch(function (err) {
       document.getElementById('lku-result').innerHTML = '<div class="empty">ไม่พบเครื่องจักรนี้ (' + err + ')</div>';
