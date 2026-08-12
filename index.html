@@ -514,7 +514,14 @@
   // ---------------------------------------------------------------------------------
 
   var __jsonpCounter = 0;
-  function jsonpRequest(qs) {
+  // retry อัตโนมัติเฉพาะตอนโหลดสคริปต์ไม่สำเร็จ (script.onerror) เพราะมักเกิดจาก cold start ของ
+  // Apps Script หรือเครือข่ายสะดุดชั่วคราว แค่ไม่กี่วินาที - ลองใหม่เองก่อนให้ผู้ใช้ต้องกด refresh เอง
+  // ไม่ retry ตอน timeout (รอครบ 35 วิ) เพราะรอไปแล้วนาน ลองซ้ำจะยิ่งทำให้รวมแล้วรอนานเกินไป
+  // (ใช้ retry เฉพาะฝั่งอ่านข้อมูล/jsonpRequest เท่านั้น - ฝั่งเขียนข้อมูล/formPostRequest ห้าม retry
+  // อัตโนมัติเด็ดขาด เพราะเสี่ยงบันทึกซ้ำซ้อนถ้าจริงๆ แล้วบันทึกสำเร็จไปแล้วรอบแรก)
+  function jsonpRequest(qs, __attempt) {
+    var attempt = __attempt || 1;
+    var MAX_ATTEMPTS = 3;
     return new Promise(function (resolve, reject) {
       var cbName = '__cb_' + (++__jsonpCounter) + '_' + Date.now();
       var script = document.createElement('script');
@@ -533,7 +540,13 @@
       };
       script.onerror = function () {
         cleanup();
-        reject(new Error('โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ (เครือข่ายอาจบล็อกอยู่)'));
+        if (attempt < MAX_ATTEMPTS) {
+          setTimeout(function () {
+            jsonpRequest(qs, attempt + 1).then(resolve, reject);
+          }, 800 * attempt); // หน่วงเพิ่มขึ้นทีละรอบ (800ms, 1600ms) กันยิงรัวถี่เกินไป
+        } else {
+          reject(new Error('โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ (เครือข่ายอาจบล็อกอยู่) ลองใหม่อัตโนมัติ ' + MAX_ATTEMPTS + ' ครั้งแล้วยังไม่สำเร็จ'));
+        }
       };
       script.src = APPS_SCRIPT_URL + '?' + qs + '&callback=' + cbName;
       document.body.appendChild(script);
