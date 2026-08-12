@@ -436,9 +436,9 @@
     <div class="toggle-group" id="c4-filterGroup">
       <button type="button" class="active" onclick="c4SetFilter('all', this)">ทั้งหมด</button>
       <button type="button" onclick="c4SetFilter('พร้อมใช้', this)">พร้อมใช้</button>
+      <button type="button" onclick="c4SetFilter('รอซ่อม', this)">รอซ่อม</button>
       <button type="button" onclick="c4SetFilter('กำลังซ่อม', this)">กำลังซ่อม</button>
       <button type="button" onclick="c4SetFilter('พัง', this)">พัง</button>
-      <button type="button" onclick="c4SetFilter('ขายแล้ว', this)">ขายแล้ว</button>
     </div>
     <input id="c4-search" placeholder="ค้นหารหัสเครื่องจักร" oninput="c4Render()">
     <div id="c4-list"><div class="loading">กำลังโหลด...</div></div>
@@ -455,9 +455,10 @@
     <label>สถานะ</label>
     <select id="c4EditModal-status">
       <option value="พร้อมใช้">พร้อมใช้</option>
+      <option value="รอซ่อม">รอซ่อม</option>
       <option value="กำลังซ่อม">กำลังซ่อม</option>
       <option value="พัง">พัง</option>
-      <option value="ขายแล้ว">ขายแล้ว</option>
+      <option value="รอขาย">รอขาย</option>
     </select>
     <label>สถานที่ซ่อม</label>
     <input id="c4EditModal-location" placeholder="เช่น อู่ ก. / หน้างาน">
@@ -1035,17 +1036,17 @@
    *  ใช้ร่วมกันทั้งหน้าตรวจสอบเครื่องจักร/รายงานหน้างาน/เสมียน4 กันสีไม่ตรงกันระหว่างหน้า */
   function maintStatusBadgeClass_(status) {
     if (status === 'พัง') return 'status-rejected';
-    if (status === 'กำลังซ่อม') return 'status-pending';
-    if (status === 'ขายแล้ว') return 'status-cancelled'; // สีเทา - เครื่องขายไปแล้ว ไม่ใช่สถานะซ่อมบำรุงปกติ
+    if (status === 'กำลังซ่อม' || status === 'รอซ่อม') return 'status-pending';
+    if (status === 'รอขาย') return 'status-cancelled'; // สีเทา - รอขาย ไม่ใช่สถานะซ่อมบำรุงปกติ (เดิมชื่อ "ขายแล้ว")
     return 'status-moved';
   }
 
   /** เช็คว่าสถานะเครื่องจักร "ไม่พร้อมใช้" หรือไม่ - ใช้แพทเทิร์นเดียวกับ maintStatusBadgeClass_ (เช็คว่า
-   *  ตรงกับสถานะที่ไม่ปกติสามแบบนี้หรือเปล่า) แทนที่จะเช็คว่า "ไม่เท่ากับพร้อมใช้" เพราะข้อมูลในชีตบางแถว
+   *  ตรงกับสถานะที่ไม่ปกติแบบใดแบบหนึ่งหรือเปล่า) แทนที่จะเช็คว่า "ไม่เท่ากับพร้อมใช้" เพราะข้อมูลในชีตบางแถว
    *  เป็นข้อความเก่าที่พิมพ์เองก่อนมีฟีเจอร์นี้ (เช่น "พร้อมใช้งาน" แทนที่จะเป็น "พร้อมใช้" เป๊ะๆ) ถ้าเช็คแบบ
    *  !== 'พร้อมใช้' จะทำให้เครื่องที่จริงๆ พร้อมใช้งานอยู่ขึ้นเตือนผิดๆ ว่าไม่พร้อมใช้ */
   function isMachineNotReady_(status) {
-    return status === 'พัง' || status === 'กำลังซ่อม' || status === 'ขายแล้ว';
+    return status === 'พัง' || status === 'กำลังซ่อม' || status === 'รอซ่อม' || status === 'รอขาย';
   }
 
   function reqMachineLabel_(m) {
