@@ -346,6 +346,7 @@
 
   <div class="tab-nav">
     <button type="button" id="c1-tabBtn-active" class="active" onclick="c1ShowTab('active')">ภาพรวม</button>
+    <button type="button" id="c1-tabBtn-fixlocation" onclick="c1ShowTab('fixlocation')">แก้ไขตำแหน่ง</button>
     <button type="button" id="c1-tabBtn-report" onclick="c1ShowTab('report')">รายงานค่าเช่า</button>
     <button type="button" id="c1-tabBtn-history" onclick="c1ShowTab('history')">ประวัติ</button>
   </div>
@@ -356,6 +357,21 @@
 
     <h2>คำขอย้ายเครื่องจักรที่กำลังดำเนินการ</h2>
     <div id="c1-list"><div class="loading">กำลังโหลด...</div></div>
+  </div>
+  <div id="c1-tab-fixlocation" style="display:none;">
+    <div class="card">
+      <label>เครื่องจักร/ทะเบียน</label>
+      <input id="c1fix-machineInput" list="c1fix-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
+      <datalist id="c1fix-machineList"></datalist>
+      <div id="c1fix-currentSite" style="font-size:12px;color:#888;margin:-6px 0 10px;"></div>
+
+      <label>หน้างานที่ถูกต้อง</label>
+      <input id="c1fix-newSite" list="c1fix-siteList" placeholder="พิมพ์ค้นหาหน้างาน" autocomplete="off">
+      <datalist id="c1fix-siteList"></datalist>
+
+      <button onclick="c1fixSubmit()" id="c1fix-submitBtn">บันทึกตำแหน่งที่ถูกต้อง</button>
+      <div id="c1fix-successMsg" class="success-msg"></div>
+    </div>
   </div>
   <div id="c1-tab-report" style="display:none;">
     <div id="c1-reportList"><div class="loading">กำลังโหลด...</div></div>
@@ -476,7 +492,7 @@
 <script>
   // ============ ตั้งค่าที่ต้องแก้ก่อนใช้งานจริง ============
   const LIFF_ID = '2010592933-J3nNOO6d';
-  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBTyeA3r7bwqqPi-d9ONKI_aAGkElFLKqOkCP2dWLYog0wgfzSGlNuTd9px81KnEjY/exec'; // TODO: อัปเดตหลัง deploy เวอร์ชันใหม่ (JSON API)
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwBTyeA3r7bwqqPi-d9ONKI_aAGkElFLKqOkCP2dWLYog0wgfzSGlNuTd9px81KnEjY/exec';
   const TELEGRAM_BOT_USERNAME = 'sp_machinetran_bot'; // ใช้ทำปุ่ม "เปิด Telegram" (t.me/<username>)
   // ==========================================================
 
@@ -615,6 +631,7 @@
     issuePjNumber: 'issuePjNumber',
     closeJob: 'closeJob',
     markSiteReviewed: 'markSiteReviewed',
+    correctMachineLocation: 'correctMachineLocation',
     updateMachineMaintenance: 'updateMachineMaintenance',
     // ---- หยุดใช้งานเครื่องจักร + รายงานค่าเช่า (feature: คำนวณค่าเช่าเครื่องจักร) ----
     requestPause: 'requestPause',
@@ -659,6 +676,7 @@
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
     markSiteReviewed: ['userId', 'siteName', 'note'],
+    correctMachineLocation: ['userId', 'machineCode', 'newSite'],
     updateMachineMaintenance: ['userId', 'machineCode', 'patch'],
     requestPause: ['userId', 'payload'],
     listMyPauses: ['userId'],
@@ -1736,7 +1754,7 @@
   }
 
   /* ============================= เสมียน 1 ============================= */
-  function c1Init() { c1LoadSites(); c1LoadList(); }
+  function c1Init() { c1LoadSites(); c1LoadList(); c1fixLoadMachines(); c1fixLoadSites(); }
 
   function c1LoadSites() {
     callServer('listSitesPendingReview').then(function (rows) {
@@ -1781,14 +1799,82 @@
 
   function c1ShowTab(tab) {
     document.getElementById('c1-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('c1-tab-fixlocation').style.display = tab === 'fixlocation' ? 'block' : 'none';
     document.getElementById('c1-tab-report').style.display = tab === 'report' ? 'block' : 'none';
     document.getElementById('c1-tab-history').style.display = tab === 'history' ? 'block' : 'none';
     document.getElementById('c1-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('c1-tabBtn-fixlocation').classList.toggle('active', tab === 'fixlocation');
     document.getElementById('c1-tabBtn-report').classList.toggle('active', tab === 'report');
     document.getElementById('c1-tabBtn-history').classList.toggle('active', tab === 'history');
     if (tab === 'active') c1LoadList();
+    else if (tab === 'fixlocation') { c1fixLoadMachines(); c1fixLoadSites(); }
     else if (tab === 'report') c1LoadReport();
     else c1LoadHistory();
+  }
+
+  /* ---------- แก้ไขตำแหน่งหน้างานปัจจุบันของเครื่องจักร (เสมียน 1) ----------
+   * ใช้ตอนพบว่าตำแหน่งในระบบไม่ตรงกับความจริง (เช่น มีคนย้ายเองโดยไม่ผ่านระบบขอย้าย) โดยไม่ต้อง
+   * เข้าไปแก้ในชีตเอง - ใช้ dropdown ค้นหาแบบเดียวกับฟอร์มขอย้าย (reqMachineLabel_/reqSiteLabel_) */
+  var c1fixMachineByLabel_ = {};
+  var c1fixSelectedMachine_ = null;
+  var c1fixMachineListenerAttached_ = false;
+
+  function c1fixLoadMachines() {
+    callServer('getMachineList').then(function (list) {
+      c1fixMachineByLabel_ = {};
+      var dl = document.getElementById('c1fix-machineList');
+      dl.innerHTML = '';
+      list.forEach(function (m) {
+        var label = reqMachineLabel_(m);
+        c1fixMachineByLabel_[label] = m;
+        var opt = document.createElement('option');
+        opt.value = label;
+        dl.appendChild(opt);
+      });
+      if (!c1fixMachineListenerAttached_) {
+        c1fixMachineListenerAttached_ = true;
+        document.getElementById('c1fix-machineInput').addEventListener('input', function () {
+          var m = c1fixMachineByLabel_[this.value];
+          c1fixSelectedMachine_ = m || null;
+          document.getElementById('c1fix-currentSite').textContent = m ?
+            ('ตำแหน่งปัจจุบันในระบบ: ' + (m.currentSite || '(ไม่ระบุ)')) : '';
+        });
+      }
+    });
+  }
+
+  function c1fixLoadSites() {
+    callServer('getSiteList').then(function (list) {
+      var dl = document.getElementById('c1fix-siteList');
+      dl.innerHTML = '';
+      list.forEach(function (s) {
+        var opt = document.createElement('option');
+        opt.value = reqSiteLabel_(s);
+        dl.appendChild(opt);
+      });
+    });
+  }
+
+  function c1fixSubmit() {
+    if (!c1fixSelectedMachine_) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ (พิมพ์ค้นหาแล้วแตะเลือก)');
+    var newSite = document.getElementById('c1fix-newSite').value.trim();
+    if (!newSite) return showToast('กรุณาระบุหน้างานที่ถูกต้อง');
+    document.getElementById('c1fix-submitBtn').disabled = true;
+    callServer('correctMachineLocation', CURRENT_USER.userId, c1fixSelectedMachine_.code, newSite)
+      .then(function () {
+        var successEl = document.getElementById('c1fix-successMsg');
+        successEl.textContent = '✅ บันทึกตำแหน่งใหม่แล้ว';
+        successEl.style.display = 'block';
+        clearTimeout(window.__c1fixSuccessTimer);
+        window.__c1fixSuccessTimer = setTimeout(function () { successEl.style.display = 'none'; }, 4000);
+        document.getElementById('c1fix-machineInput').value = '';
+        document.getElementById('c1fix-newSite').value = '';
+        document.getElementById('c1fix-currentSite').textContent = '';
+        c1fixSelectedMachine_ = null;
+        c1fixLoadMachines(); // โหลดใหม่ให้ currentSite ในลิสต์อัปเดตตาม
+      })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); })
+      .finally(function () { document.getElementById('c1fix-submitBtn').disabled = false; });
   }
 
   function c1LoadReport() {
