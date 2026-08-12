@@ -439,6 +439,7 @@
       <button type="button" onclick="c4SetFilter('รอซ่อม', this)">รอซ่อม</button>
       <button type="button" onclick="c4SetFilter('กำลังซ่อม', this)">กำลังซ่อม</button>
       <button type="button" onclick="c4SetFilter('พัง', this)">พัง</button>
+      <button type="button" onclick="c4SetFilter('รอขาย', this)">รอขาย</button>
     </div>
     <input id="c4-search" placeholder="ค้นหารหัสเครื่องจักร" oninput="c4Render()">
     <div id="c4-list"><div class="loading">กำลังโหลด...</div></div>
@@ -459,6 +460,7 @@
       <option value="กำลังซ่อม">กำลังซ่อม</option>
       <option value="พัง">พัง</option>
       <option value="รอขาย">รอขาย</option>
+      <option value="ขาย">ขาย</option>
     </select>
     <label>สถานที่ซ่อม</label>
     <input id="c4EditModal-location" placeholder="เช่น อู่ ก. / หน้างาน">
@@ -1037,7 +1039,7 @@
   function maintStatusBadgeClass_(status) {
     if (status === 'พัง') return 'status-rejected';
     if (status === 'กำลังซ่อม' || status === 'รอซ่อม') return 'status-pending';
-    if (status === 'รอขาย') return 'status-cancelled'; // สีเทา - รอขาย ไม่ใช่สถานะซ่อมบำรุงปกติ (เดิมชื่อ "ขายแล้ว")
+    if (status === 'รอขาย' || status === 'ขาย') return 'status-cancelled'; // สีเทา - ไม่ใช่สถานะซ่อมบำรุงปกติ
     return 'status-moved';
   }
 
@@ -1046,7 +1048,7 @@
    *  เป็นข้อความเก่าที่พิมพ์เองก่อนมีฟีเจอร์นี้ (เช่น "พร้อมใช้งาน" แทนที่จะเป็น "พร้อมใช้" เป๊ะๆ) ถ้าเช็คแบบ
    *  !== 'พร้อมใช้' จะทำให้เครื่องที่จริงๆ พร้อมใช้งานอยู่ขึ้นเตือนผิดๆ ว่าไม่พร้อมใช้ */
   function isMachineNotReady_(status) {
-    return status === 'พัง' || status === 'กำลังซ่อม' || status === 'รอซ่อม' || status === 'รอขาย';
+    return status === 'พัง' || status === 'กำลังซ่อม' || status === 'รอซ่อม' || status === 'รอขาย' || status === 'ขาย';
   }
 
   function reqMachineLabel_(m) {
