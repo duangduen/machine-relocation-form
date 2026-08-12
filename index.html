@@ -2246,6 +2246,7 @@
           '<div class="row"><span class="label">เริ่มซ่อม</span><span>' + (m.repairStart || '-') + '</span></div>' +
           '<div class="row"><span class="label">คาดว่าจะเสร็จ</span><span>' + (m.repairEta || '-') + '</span></div>'
         ) : '') +
+        (m.repairNote ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + m.repairNote + '</span></div>' : '') +
         '<div class="card-actions"><button class="secondary" onclick="c4OpenModal(\'' + m.code + '\')">แก้ไขสถานะ</button></div>' +
         '</div>';
     }).join('');
