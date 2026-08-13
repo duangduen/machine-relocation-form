@@ -347,7 +347,6 @@
   <div class="tab-nav">
     <button type="button" id="c1-tabBtn-active" class="active" onclick="c1ShowTab('active')">ภาพรวม</button>
     <button type="button" id="c1-tabBtn-fixlocation" onclick="c1ShowTab('fixlocation')">แก้ไขตำแหน่ง</button>
-    <button type="button" id="c1-tabBtn-report" onclick="c1ShowTab('report')">รายงานค่าเช่า</button>
     <button type="button" id="c1-tabBtn-history" onclick="c1ShowTab('history')">ประวัติ</button>
   </div>
 
@@ -372,9 +371,6 @@
       <button onclick="c1fixSubmit()" id="c1fix-submitBtn">บันทึกตำแหน่งที่ถูกต้อง</button>
       <div id="c1fix-successMsg" class="success-msg"></div>
     </div>
-  </div>
-  <div id="c1-tab-report" style="display:none;">
-    <div id="c1-reportList"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="c1-tab-history" style="display:none;">
     <div id="c1-historyList"><div class="loading">กำลังโหลด...</div></div>
@@ -1213,16 +1209,32 @@
       if (!reqMachineListenerAttached_) {
         reqMachineListenerAttached_ = true;
         document.getElementById('req-machineInput').addEventListener('input', function () {
+          var typed = this.value.trim();
           var m = reqMachineByLabel[this.value];
-          reqSelectedMachine = m || null;
-          document.getElementById('req-origin').value = m ? m.currentSite : '';
-          // เตือน (ไม่บล็อก) ถ้าเครื่องที่เลือกไม่พร้อมใช้งาน (feature: เสมียน4 ซ่อมบำรุง) - ตามที่ตกลงกันไว้
-          // ว่ายังให้เลือกได้เผื่อมีเคสต้องย้ายเครื่องที่พัง/กำลังซ่อมไปอู่ซ่อม แค่ขึ้นเตือนให้ระวัง
           var warnEl = document.getElementById('req-machineWarning');
-          if (m && m.maintStatus && isMachineNotReady_(m.maintStatus)) {
-            warnEl.textContent = '⚠️ เครื่องจักรนี้สถานะ "' + m.maintStatus + '" อยู่ กรุณาตรวจสอบก่อนขอย้าย';
+          if (m) {
+            // เลือกเครื่องจักรที่มีในทะเบียนตามปกติ - auto-fill ต้นทางจากตำแหน่งปัจจุบันในระบบ
+            reqSelectedMachine = m;
+            document.getElementById('req-origin').value = m.currentSite;
+            // เตือน (ไม่บล็อก) ถ้าเครื่องที่เลือกไม่พร้อมใช้งาน (feature: เสมียน4 ซ่อมบำรุง) - ตามที่ตกลงกันไว้
+            // ว่ายังให้เลือกได้เผื่อมีเคสต้องย้ายเครื่องที่พัง/กำลังซ่อมไปอู่ซ่อม แค่ขึ้นเตือนให้ระวัง
+            if (m.maintStatus && isMachineNotReady_(m.maintStatus)) {
+              warnEl.textContent = '⚠️ เครื่องจักรนี้สถานะ "' + m.maintStatus + '" อยู่ กรุณาตรวจสอบก่อนขอย้าย';
+              warnEl.style.display = 'block';
+            } else {
+              warnEl.style.display = 'none';
+            }
+          } else if (typed) {
+            // ไม่พบเครื่องจักรนี้ในทะเบียน (13 ส.ค. 2569 ตกลงว่าไม่บล็อกช่าง) - ให้พิมพ์รหัส/ชื่อรุ่นเองแทน
+            // แล้วส่งคำขอด้วยข้อความที่พิมพ์ตรงๆ ระบบจะแจ้งเสมียน1 ให้ไปเพิ่มเข้าทะเบียนย้อนหลัง (ดู
+            // notifyUnregisteredMachine_ ใน Notify.gs) บังคับให้กรอกต้นทางเองเพราะไม่มีข้อมูลใน master ให้ auto-fill
+            reqSelectedMachine = { code: typed, isNew: true };
+            document.getElementById('req-origin').value = '';
+            warnEl.textContent = '⚠️ ไม่พบเครื่องจักรนี้ในทะเบียน จะส่งคำขอด้วยรหัส/ชื่อนี้ และแจ้งเสมียน1 ให้เพิ่มเข้าระบบ (กรุณาระบุต้นทางเองด้วย)';
             warnEl.style.display = 'block';
           } else {
+            reqSelectedMachine = null;
+            document.getElementById('req-origin').value = '';
             warnEl.style.display = 'none';
           }
         });
@@ -1289,8 +1301,13 @@
     reqEditingId = id;
 
     var machine = reqMachines.filter(function (m) { return m.code === r['เครื่องจักร/ทะเบียน']; })[0];
-    reqSelectedMachine = machine || { code: r['เครื่องจักร/ทะเบียน'] };
+    reqSelectedMachine = machine || { code: r['เครื่องจักร/ทะเบียน'], isNew: true };
     document.getElementById('req-machineInput').value = machine ? reqMachineLabel_(machine) : r['เครื่องจักร/ทะเบียน'];
+    document.getElementById('req-machineWarning').style.display = machine ? 'none' : 'block';
+    if (!machine) {
+      document.getElementById('req-machineWarning').textContent =
+        '⚠️ เครื่องจักรนี้ยังไม่มีในทะเบียน (แจ้งเสมียน1 แล้ว) แก้ไขต้นทาง/รหัสได้ถ้าจำเป็น';
+    }
     document.getElementById('req-origin').value = r['ต้นทาง'] || '';
     document.getElementById('req-destination').value = r['ปลายทาง'] || '';
     document.getElementById('req-wantedDate').value = toDateInputValue_(r['วันที่ต้องการย้าย']);
@@ -1319,6 +1336,14 @@
     if (!destinationTyped) return showToast('กรุณาระบุปลายทาง');
     if (!originTyped) return showToast('กรุณาระบุต้นทาง');
     if (!wantedDateTyped) return showToast('กรุณาระบุวันที่ต้องการย้าย');
+
+    // เครื่องจักรที่พิมพ์เองเพราะไม่มีในทะเบียน - ยืนยันอีกครั้งก่อนส่ง กันพิมพ์ผิด/สะกดผิดโดยไม่ทันสังเกต
+    // (ดู listener ของ req-machineInput ด้านบนที่ตั้ง isNew ไว้ตอนหาไม่เจอในลิสต์)
+    if (reqSelectedMachine.isNew) {
+      var confirmMsg = 'ไม่พบเครื่องจักร "' + reqSelectedMachine.code + '" ในทะเบียน\n' +
+        'ต้องการส่งคำขอด้วยรหัส/ชื่อนี้เลยหรือไม่? (ระบบจะแจ้งเสมียน1 ให้เพิ่มเข้าระบบให้)';
+      if (!confirm(confirmMsg)) return;
+    }
 
     var matchedSite = reqSiteByLabel[destinationTyped];
 
@@ -1816,15 +1841,12 @@
   function c1ShowTab(tab) {
     document.getElementById('c1-tab-active').style.display = tab === 'active' ? 'block' : 'none';
     document.getElementById('c1-tab-fixlocation').style.display = tab === 'fixlocation' ? 'block' : 'none';
-    document.getElementById('c1-tab-report').style.display = tab === 'report' ? 'block' : 'none';
     document.getElementById('c1-tab-history').style.display = tab === 'history' ? 'block' : 'none';
     document.getElementById('c1-tabBtn-active').classList.toggle('active', tab === 'active');
     document.getElementById('c1-tabBtn-fixlocation').classList.toggle('active', tab === 'fixlocation');
-    document.getElementById('c1-tabBtn-report').classList.toggle('active', tab === 'report');
     document.getElementById('c1-tabBtn-history').classList.toggle('active', tab === 'history');
     if (tab === 'active') c1LoadList();
     else if (tab === 'fixlocation') { c1fixLoadMachines(); c1fixLoadSites(); }
-    else if (tab === 'report') c1LoadReport();
     else c1LoadHistory();
   }
 
@@ -1891,13 +1913,6 @@
       })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); })
       .finally(function () { document.getElementById('c1fix-submitBtn').disabled = false; });
-  }
-
-  function c1LoadReport() {
-    var el = document.getElementById('c1-reportList');
-    callServer('listRentalReport', CURRENT_USER.userId).then(function (rows) {
-      el.innerHTML = renderRentalReport_(rows);
-    }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   function c1LoadHistory() {
