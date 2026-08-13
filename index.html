@@ -682,7 +682,7 @@
     editMyRequest: ['userId', 'requestId', 'patch'],
     approveRequest: ['userId', 'requestId'],
     rejectRequest: ['userId', 'requestId', 'reason'],
-    claimJob: ['userId', 'requestId'],
+    claimJob: ['userId', 'requestId', 'startMileage'],
     releaseJob: ['userId', 'requestId'],
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
@@ -702,7 +702,7 @@
   // เหลือ markMoved อย่างเดียวที่ยังต้องใช้ hidden-iframe-form POST เพราะมีรูปแนบ (base64)
   // ที่อาจยาวเกินขีดจำกัดความยาว URL ของ JSONP/GET
   var POST_ACTION_ARGS = {
-    markMoved: ['userId', 'requestId', 'actualDate', 'photo']
+    markMoved: ['userId', 'requestId', 'actualDate', 'photo', 'endMileage']
   };
 
   /** เรียก Apps Script Web App แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้
@@ -1603,15 +1603,30 @@
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
-          '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
+          '<button onclick="drvOpenClaimForm(\'' + id + '\')">รับงานนี้</button>' +
+          '<div id="drv-claimform-' + id + '"></div>' +
           '</div>';
       }).join('');
     });
   }
 
-  function drvClaim(id, btn) {
+  /** เปิดฟอร์มกรอกเลขไมล์ต้นทางก่อนกดยืนยันรับงานจริง (บังคับกรอกเสมอ - ใช้คำนวณระยะทางร่วมกับ
+   *  เลขไมล์ปลายทางตอนแจ้งย้ายเสร็จ ดู claimJob ใน Requests.gs ประกอบ) */
+  function drvOpenClaimForm(id) {
+    var box = document.getElementById('drv-claimform-' + id);
+    box.innerHTML =
+      '<label>เลขไมล์ต้นทาง (ก่อนออกจากต้นทาง)</label>' +
+      '<input type="number" inputmode="numeric" id="drv-startMileage-' + id + '" placeholder="เช่น 12345">' +
+      '<button onclick="drvClaim(\'' + id + '\')">ยืนยันรับงาน</button>';
+  }
+
+  function drvClaim(id) {
+    var mileageInput = document.getElementById('drv-startMileage-' + id);
+    var mileage = mileageInput.value.trim();
+    if (!mileage) return showToast('กรุณาระบุเลขไมล์ต้นทาง');
+    var btn = mileageInput.nextElementSibling;
     btn.disabled = true;
-    callServer('claimJob', CURRENT_USER.userId, id)
+    callServer('claimJob', CURRENT_USER.userId, id, mileage)
       .then(function () { showToast('รับงานแล้ว'); drvLoadAll(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
@@ -1627,6 +1642,8 @@
     var box = document.getElementById('drv-form-' + id);
     box.innerHTML =
       '<div style="font-size:12px;color:#888;margin:2px 0 8px;">ระบบจะบันทึกวันที่-เวลาปัจจุบันให้อัตโนมัติตอนกดยืนยัน (ถ้ากดผิดเวลา แก้ไขทีหลังได้จากแท็บประวัติ)</div>' +
+      '<label>เลขไมล์ปลายทาง</label>' +
+      '<input type="number" inputmode="numeric" id="drv-endMileage-' + id + '" placeholder="เช่น 12400">' +
       '<label>รูปหลักฐาน (ถ้ามี)</label>' +
       '<input type="file" accept="image/*" capture="environment" id="drv-photo-' + id + '">' +
       '<button class="success" onclick="drvSubmitMoved(\'' + id + '\')">ยืนยันย้ายเสร็จ (เวลาปัจจุบัน)</button>';
@@ -1667,19 +1684,22 @@
   }
 
   function drvSubmitMoved(id) {
+    var endMileage = document.getElementById('drv-endMileage-' + id).value.trim();
+    if (!endMileage) return showToast('กรุณาระบุเลขไมล์ปลายทาง');
+
     var fileInput = document.getElementById('drv-photo-' + id);
     var file = fileInput.files[0];
 
-    if (!file) { drvDoSubmitMoved(id, null); return; }
+    if (!file) { drvDoSubmitMoved(id, null, endMileage); return; }
 
     showToast('กำลังเตรียมรูป...');
     compressImageFile_(file, 1280, 0.7)
-      .then(function (photo) { drvDoSubmitMoved(id, photo); })
+      .then(function (photo) { drvDoSubmitMoved(id, photo, endMileage); })
       .catch(function (err) {
         // ย่อรูปไม่สำเร็จ (เช่นเบราว์เซอร์เก่ามาก) - ยังส่งไฟล์ต้นฉบับต่อไปดีกว่าบล็อกไม่ให้บันทึกเลย
         var reader = new FileReader();
         reader.onload = function () {
-          drvDoSubmitMoved(id, { base64: reader.result.split(',')[1], mimeType: file.type, filename: file.name });
+          drvDoSubmitMoved(id, { base64: reader.result.split(',')[1], mimeType: file.type, filename: file.name }, endMileage);
         };
         reader.readAsDataURL(file);
       });
@@ -1690,9 +1710,9 @@
    * ลบการ์ดของงานนี้ออกจากหน้าจอทันทีหลังบันทึกสำเร็จ (ไม่รอ drvLoadAll() โหลดเสร็จ) กันปัญหาการ์ดค้าง
    * ไม่หายไปจนกว่าจะสลับแท็บแล้วกลับมาใหม่ - ยังเรียก drvLoadAll() ต่อท้ายเพื่อรีเฟรชคิวเปิด/รายการให้ตรงจริง
    */
-  function drvDoSubmitMoved(id, photo) {
+  function drvDoSubmitMoved(id, photo, endMileage) {
     showToast('กำลังบันทึก...');
-    callServer('markMoved', CURRENT_USER.userId, id, '', photo)
+    callServer('markMoved', CURRENT_USER.userId, id, '', photo, endMileage)
       .then(function () {
         showToast('บันทึกย้ายเสร็จแล้ว');
         var formBox = document.getElementById('drv-form-' + id);
@@ -2061,6 +2081,8 @@
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
         '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
+        '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
+        '<div class="row"><span class="label">ระยะทาง</span><span>' + (r['ระยะทาง (กม.)'] || r['ระยะทาง (กม.)'] === 0 ? r['ระยะทาง (กม.)'] + ' กม.' : '-') + '</span></div>' +
         (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '<div class="row"><span class="label">รูปหลักฐาน</span><span>ไม่มีแนบ</span></div>') +
         '<button class="success" ' + (hasPj ? '' : 'disabled') + ' onclick="c3Close(\'' + id + '\', this)">' +
         (hasPj ? 'บันทึกค่าเที่ยว / ปิดงาน' : 'รอเลข PJ ก่อน') + '</button>' +
@@ -2096,6 +2118,8 @@
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
+          '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
+          '<div class="row"><span class="label">ระยะทาง</span><span>' + (r['ระยะทาง (กม.)'] || r['ระยะทาง (กม.)'] === 0 ? r['ระยะทาง (กม.)'] + ' กม.' : '-') + '</span></div>' +
           '<div class="row"><span class="label">ปิดงานโดย</span><span>' + (r['เสมียน 3 ตรวจสอบแล้ว + เวลา'] || '-') + '</span></div>' +
           (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '') +
           '</div>';
