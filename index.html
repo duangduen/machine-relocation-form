@@ -638,6 +638,7 @@
     approveRequest: 'approveRequest',
     rejectRequest: 'rejectRequest',
     claimJob: 'claimJob',
+    recordStartMileage: 'recordStartMileage',
     releaseJob: 'releaseJob',
     editRequestFields: 'editRequestFields',
     issuePjNumber: 'issuePjNumber',
@@ -682,7 +683,8 @@
     editMyRequest: ['userId', 'requestId', 'patch'],
     approveRequest: ['userId', 'requestId'],
     rejectRequest: ['userId', 'requestId', 'reason'],
-    claimJob: ['userId', 'requestId', 'startMileage'],
+    claimJob: ['userId', 'requestId'],
+    recordStartMileage: ['userId', 'requestId', 'mileage'],
     releaseJob: ['userId', 'requestId'],
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
@@ -702,7 +704,7 @@
   // เหลือ markMoved อย่างเดียวที่ยังต้องใช้ hidden-iframe-form POST เพราะมีรูปแนบ (base64)
   // ที่อาจยาวเกินขีดจำกัดความยาว URL ของ JSONP/GET
   var POST_ACTION_ARGS = {
-    markMoved: ['userId', 'requestId', 'actualDate', 'photo', 'endMileage']
+    markMoved: ['userId', 'requestId', 'actualDate', 'photo', 'startMileage', 'endMileage']
   };
 
   /** เรียก Apps Script Web App แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้
@@ -1570,20 +1572,30 @@
   function drvInit() { drvLoadAll(); }
   function drvLoadAll() { drvLoadMyJobs(); drvLoadOpenQueue(); }
 
+  // เก็บแคชแถวข้อมูลงานที่รับไว้ล่าสุด ไว้ใช้ prefill เลขไมล์ต้นทางที่เคยบันทึกไว้ (ถ้ามี) ตอนเปิดฟอร์ม
+  // "ย้ายเสร็จแล้ว" (ดู drvOpenMovedForm) กันคนขับต้องจำ/เปิดหาเลขไมล์เดิมเอง
+  var drvMyJobsCache = {};
+
   function drvLoadMyJobs() {
     callServer('listMyClaimedJobs', CURRENT_USER.userId).then(function (rows) {
       var el = document.getElementById('drv-myJobs');
+      drvMyJobsCache = {};
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีงานที่รับไว้</div>'; return; }
       el.innerHTML = rows.map(function (r) {
         var id = r['Request ID'];
+        drvMyJobsCache[id] = r;
+        var startMileage = r['เลขไมล์ต้นทาง'];
         return '<div class="card">' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          '<div class="row"><span class="label">เลขไมล์ต้นทาง</span><span>' + (startMileage || 'ยังไม่ได้บันทึก') + '</span></div>' +
           '<div>' +
+          '<button class="secondary" onclick="drvOpenStartMileageForm(\'' + id + '\')">📍 บันทึกเลขไมล์ต้นทาง</button>' +
           '<button class="success" onclick="drvOpenMovedForm(\'' + id + '\')">✅ ย้ายเสร็จแล้ว</button>' +
           '<button class="secondary" onclick="drvRelease(\'' + id + '\', this)">คืนงานเข้าคิว</button>' +
           '</div>' +
+          '<div id="drv-startform-' + id + '"></div>' +
           '<div id="drv-form-' + id + '"></div>' +
           '</div>';
       }).join('');
@@ -1603,31 +1615,41 @@
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
-          '<button onclick="drvOpenClaimForm(\'' + id + '\')">รับงานนี้</button>' +
-          '<div id="drv-claimform-' + id + '"></div>' +
+          '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
           '</div>';
       }).join('');
     });
   }
 
-  /** เปิดฟอร์มกรอกเลขไมล์ต้นทางก่อนกดยืนยันรับงานจริง (บังคับกรอกเสมอ - ใช้คำนวณระยะทางร่วมกับ
-   *  เลขไมล์ปลายทางตอนแจ้งย้ายเสร็จ ดู claimJob ใน Requests.gs ประกอบ) */
-  function drvOpenClaimForm(id) {
-    var box = document.getElementById('drv-claimform-' + id);
-    box.innerHTML =
-      '<label>เลขไมล์ต้นทาง (ก่อนออกจากต้นทาง)</label>' +
-      '<input type="number" inputmode="numeric" id="drv-startMileage-' + id + '" placeholder="เช่น 12345">' +
-      '<button onclick="drvClaim(\'' + id + '\')">ยืนยันรับงาน</button>';
+  function drvClaim(id, btn) {
+    btn.disabled = true;
+    callServer('claimJob', CURRENT_USER.userId, id)
+      .then(function () { showToast('รับงานแล้ว'); drvLoadAll(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
-  function drvClaim(id) {
-    var mileageInput = document.getElementById('drv-startMileage-' + id);
-    var mileage = mileageInput.value.trim();
+  /**
+   * เปิดฟอร์มบันทึกเลขไมล์ต้นทาง - ไม่บังคับตอนกดรับงาน (13 ส.ค. 2569 แก้ตามฟีดแบ็ก เพราะตอนรับงาน
+   * คนขับอาจยังไม่ได้อยู่ที่ต้นทางจริง) ให้กดปุ่มนี้ตอนไปถึงต้นทางแล้วแทน ถ้าลืมก็ยังกรอกได้อีกครั้ง
+   * ตอนกดย้ายเสร็จ (ดู drvOpenMovedForm ด้านล่าง)
+   */
+  function drvOpenStartMileageForm(id) {
+    var box = document.getElementById('drv-startform-' + id);
+    var current = drvMyJobsCache[id] && drvMyJobsCache[id]['เลขไมล์ต้นทาง'];
+    box.innerHTML =
+      '<label>เลขไมล์ต้นทาง (ตอนนี้อยู่ที่ต้นทางแล้ว)</label>' +
+      '<input type="number" inputmode="numeric" id="drv-startMileage-' + id + '" placeholder="เช่น 12345" value="' + (current || '') + '">' +
+      '<button onclick="drvSaveStartMileage(\'' + id + '\')">บันทึกเลขไมล์ต้นทาง</button>';
+  }
+
+  function drvSaveStartMileage(id) {
+    var input = document.getElementById('drv-startMileage-' + id);
+    var mileage = input.value.trim();
     if (!mileage) return showToast('กรุณาระบุเลขไมล์ต้นทาง');
-    var btn = mileageInput.nextElementSibling;
+    var btn = input.nextElementSibling;
     btn.disabled = true;
-    callServer('claimJob', CURRENT_USER.userId, id, mileage)
-      .then(function () { showToast('รับงานแล้ว'); drvLoadAll(); })
+    callServer('recordStartMileage', CURRENT_USER.userId, id, mileage)
+      .then(function () { showToast('บันทึกเลขไมล์ต้นทางแล้ว'); drvLoadMyJobs(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
@@ -1638,10 +1660,18 @@
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
+  /**
+   * เลขไมล์ต้นทาง-ปลายทาง บังคับกรอกทั้งคู่ตรงนี้เสมอ (เป็นจุดสุดท้ายที่บังคับได้) - ถ้าเคยกด "บันทึกเลข
+   * ไมล์ต้นทาง" ไว้แล้วจะ prefill ค่าเดิมมาให้ แต่ยังแก้ไขได้ถ้ากรอกผิด ถ้ายังไม่เคยบันทึกมาก่อนเลยก็กรอก
+   * ใหม่ตรงนี้ได้เลย (ดู markMoved ใน Requests.gs - ค่าที่ส่งตอนนี้จะทับค่าเดิมเสมอ)
+   */
   function drvOpenMovedForm(id) {
     var box = document.getElementById('drv-form-' + id);
+    var startMileage = drvMyJobsCache[id] && drvMyJobsCache[id]['เลขไมล์ต้นทาง'];
     box.innerHTML =
       '<div style="font-size:12px;color:#888;margin:2px 0 8px;">ระบบจะบันทึกวันที่-เวลาปัจจุบันให้อัตโนมัติตอนกดยืนยัน (ถ้ากดผิดเวลา แก้ไขทีหลังได้จากแท็บประวัติ)</div>' +
+      '<label>เลขไมล์ต้นทาง</label>' +
+      '<input type="number" inputmode="numeric" id="drv-startMileageMoved-' + id + '" placeholder="เช่น 12345" value="' + (startMileage || '') + '">' +
       '<label>เลขไมล์ปลายทาง</label>' +
       '<input type="number" inputmode="numeric" id="drv-endMileage-' + id + '" placeholder="เช่น 12400">' +
       '<label>รูปหลักฐาน (ถ้ามี)</label>' +
@@ -1684,22 +1714,24 @@
   }
 
   function drvSubmitMoved(id) {
+    var startMileage = document.getElementById('drv-startMileageMoved-' + id).value.trim();
+    if (!startMileage) return showToast('กรุณาระบุเลขไมล์ต้นทาง');
     var endMileage = document.getElementById('drv-endMileage-' + id).value.trim();
     if (!endMileage) return showToast('กรุณาระบุเลขไมล์ปลายทาง');
 
     var fileInput = document.getElementById('drv-photo-' + id);
     var file = fileInput.files[0];
 
-    if (!file) { drvDoSubmitMoved(id, null, endMileage); return; }
+    if (!file) { drvDoSubmitMoved(id, null, startMileage, endMileage); return; }
 
     showToast('กำลังเตรียมรูป...');
     compressImageFile_(file, 1280, 0.7)
-      .then(function (photo) { drvDoSubmitMoved(id, photo, endMileage); })
+      .then(function (photo) { drvDoSubmitMoved(id, photo, startMileage, endMileage); })
       .catch(function (err) {
         // ย่อรูปไม่สำเร็จ (เช่นเบราว์เซอร์เก่ามาก) - ยังส่งไฟล์ต้นฉบับต่อไปดีกว่าบล็อกไม่ให้บันทึกเลย
         var reader = new FileReader();
         reader.onload = function () {
-          drvDoSubmitMoved(id, { base64: reader.result.split(',')[1], mimeType: file.type, filename: file.name }, endMileage);
+          drvDoSubmitMoved(id, { base64: reader.result.split(',')[1], mimeType: file.type, filename: file.name }, startMileage, endMileage);
         };
         reader.readAsDataURL(file);
       });
@@ -1710,9 +1742,9 @@
    * ลบการ์ดของงานนี้ออกจากหน้าจอทันทีหลังบันทึกสำเร็จ (ไม่รอ drvLoadAll() โหลดเสร็จ) กันปัญหาการ์ดค้าง
    * ไม่หายไปจนกว่าจะสลับแท็บแล้วกลับมาใหม่ - ยังเรียก drvLoadAll() ต่อท้ายเพื่อรีเฟรชคิวเปิด/รายการให้ตรงจริง
    */
-  function drvDoSubmitMoved(id, photo, endMileage) {
+  function drvDoSubmitMoved(id, photo, startMileage, endMileage) {
     showToast('กำลังบันทึก...');
-    callServer('markMoved', CURRENT_USER.userId, id, '', photo, endMileage)
+    callServer('markMoved', CURRENT_USER.userId, id, '', photo, startMileage, endMileage)
       .then(function () {
         showToast('บันทึกย้ายเสร็จแล้ว');
         var formBox = document.getElementById('drv-form-' + id);
