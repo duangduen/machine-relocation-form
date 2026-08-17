@@ -498,6 +498,24 @@
   var CURRENT_USER = null;
   var CURRENT_ROLES = []; // เก็บ roles ล่าสุดจาก whoAmI ไว้ใช้ตอนกด "กลับเมนูหลัก" จากหน้าที่ใช้ร่วมกันทุกบทบาท
 
+  /** แผนที่รหัสเครื่องจักร -> ประเภทรถ (เช่น "รถบด") ใช้แต่งข้อความ "B-32 (รถบด)" ในการ์ดทุกแท็บ ที่แสดง
+   *  แค่รหัสเครื่องจักรเปล่าๆ ทำให้ผู้อนุมัติ/เสมียนจำทะเบียนไม่ได้ว่าเป็นรถอะไร (เหมือนที่ทำไว้ฝั่ง Telegram
+   *  ผ่าน machineLabelWithType_ ใน MasterData.gs แล้ว - อันนี้คือฝั่ง frontend/การ์ดใน index.html เอง)
+   *  โหลดครั้งเดียวตอน login สำเร็จ (ดู initApp) ไม่ต้องรอให้ user เปิดแท็บช่างคุมงานก่อนถึงจะมีข้อมูล */
+  var MACHINE_TYPE_MAP_ = {};
+  function loadMachineTypeMap_() {
+    return callServer('getMachineList').then(function (list) {
+      list.forEach(function (m) { MACHINE_TYPE_MAP_[m.code] = m.type; });
+    }).catch(function () { /* โหลดไม่สำเร็จ - เงียบไว้ การ์ดจะโชว์แค่รหัสเปล่าๆ เหมือนเดิม ไม่บล็อกอย่างอื่น */ });
+  }
+  /** แปลงรหัสเครื่องจักรเป็น "รหัส (ประเภท)" ถ้ามีข้อมูลประเภทอยู่ใน MACHINE_TYPE_MAP_ ไม่งั้นคืนรหัสเปล่าๆ
+   *  ใช้แทน r['เครื่องจักร/ทะเบียน'] ตรงๆ ในทุกการ์ดที่แสดงเครื่องจักร */
+  function machineTypeLabel_(code) {
+    if (!code) return code || '';
+    var t = MACHINE_TYPE_MAP_[code];
+    return t ? (code + ' (' + t + ')') : code;
+  }
+
   // ---------------------------------------------------------------------------------
   // LINE iOS in-app browser (WebKit) ปฏิเสธการอ่าน response จาก fetch() แบบ cors-mode
   // ไปยัง Apps Script แม้ domain จะเชื่อมต่อได้จริง (ยืนยันแล้วด้วย diag.html) - เข้าใจว่า
@@ -878,6 +896,9 @@
         return;
       }
       CURRENT_ROLES = info.roles;
+      // รอโหลดแผนที่ประเภทรถให้เสร็จก่อนโชว์แท็บแรก กันปัญหาการ์ดชุดแรกที่เห็นไม่มีประเภทต่อท้าย (ต้องรีเฟรช
+      // แท็บเองถึงจะขึ้น) - ใช้ await เพราะ callServer (JSONP) เป็น request สั้นๆ ไม่ทำให้หน้าล่าช้าเห็นได้ชัด
+      await loadMachineTypeMap_();
       showRoleSwitcher(info.roles);
 
       // รองรับ deep link จาก Rich Menu เช่น ?tab=lookup / ?tab=report เปิดหน้าที่ต้องการทันที
@@ -1173,7 +1194,7 @@
         return '<div class="card">' +
           '<span class="' + pauStatusBadgeClass_(r['สถานะ']) + '">' + r['สถานะ'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="row"><span class="label">หน้างาน</span><span>' + r['หน้างาน'] + '</span></div>' +
           '<div class="row"><span class="label">เริ่มหยุด</span><span>' + formatDateTH_(r['วันที่เริ่มหยุด']) + '</span></div>' +
           (r['วันที่กลับมาใช้งาน'] ? '<div class="row"><span class="label">กลับมาใช้งาน</span><span>' + formatDateTH_(r['วันที่กลับมาใช้งาน']) + '</span></div>' : '') +
@@ -1396,7 +1417,7 @@
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
@@ -1427,7 +1448,7 @@
       return '<div class="card' + urgentClass + '">' +
         (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
@@ -1479,7 +1500,7 @@
         var id = r['Pause ID'];
         return '<div class="card">' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="row"><span class="label">หน้างาน</span><span>' + r['หน้างาน'] + '</span></div>' +
           '<div class="row"><span class="label">ผู้แจ้ง</span><span>' + r['ผู้แจ้ง'] + '</span></div>' +
           '<div class="row"><span class="label">เริ่มหยุด</span><span>' + formatDateTH_(r['วันที่เริ่มหยุด']) + '</span></div>' +
@@ -1506,7 +1527,7 @@
       return '<div class="card">' +
         (r.interim ? '<span class="badge">ยังอยู่หน้างาน (ยอดชั่วคราว)</span>' : '<span class="badge status-closed">ย้ายออกแล้ว</span>') +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r.requestId + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r.machine + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r.machine) + '</span></div>' +
         '<div class="row"><span class="label">หน้างาน</span><span>' + r.site + '</span></div>' +
         '<div class="row"><span class="label">เข้าหน้างาน</span><span>' + r.entry + '</span></div>' +
         '<div class="row"><span class="label">ออกจากหน้างาน</span><span>' + (r.exit || '(ยังอยู่)') + '</span></div>' +
@@ -1539,7 +1560,7 @@
       return '<div class="card">' +
         '<span class="' + pauStatusBadgeClass_(r['สถานะ']) + '">' + r['สถานะ'] + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Pause ID'] + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="row"><span class="label">หน้างาน</span><span>' + r['หน้างาน'] + '</span></div>' +
         '<div class="row"><span class="label">ผู้แจ้ง</span><span>' + r['ผู้แจ้ง'] + '</span></div>' +
         '<div class="row"><span class="label">เริ่มหยุด</span><span>' + formatDateTH_(r['วันที่เริ่มหยุด']) + '</span></div>' +
@@ -1559,7 +1580,7 @@
       return '<div class="card' + urgentClass + '">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
         '<div class="row"><span class="label">ผู้อนุมัติ</span><span>' + (r['ผู้อนุมัติ + เวลา'] || '-') + '</span></div>' +
@@ -1587,7 +1608,7 @@
         var startMileage = r['เลขไมล์ต้นทาง'];
         return '<div class="card">' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">เลขไมล์ต้นทาง</span><span>' + (startMileage || 'ยังไม่ได้บันทึก') + '</span></div>' +
           '<div>' +
@@ -1612,7 +1633,7 @@
         return '<div class="card' + urgentClass + '">' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
@@ -1772,7 +1793,7 @@
         return '<div class="card">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
           // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้ายอีก กันยอดค่าเช่าที่ตรวจไปแล้วเปลี่ยน
@@ -1881,7 +1902,7 @@
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
           '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
@@ -1996,7 +2017,7 @@
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
@@ -2037,7 +2058,7 @@
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ขอ</span><span>' + r['วันที่ขอ'] + '</span></div>' +
         (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
@@ -2083,7 +2104,7 @@
         return '<div class="card">' +
           '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">ออกเลขโดย</span><span>' + (r['ผู้ออกเลข PJ + เวลา'] || '-') + '</span></div>' +
           '</div>';
@@ -2109,7 +2130,7 @@
       return '<div class="card">' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + (hasPj ? ' (' + r['เลข PJ'] + ')' : '') + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
         '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
@@ -2146,7 +2167,7 @@
         return '<div class="card">' +
           '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + r['เครื่องจักร/ทะเบียน'] + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
@@ -2363,7 +2384,7 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
       el.innerHTML = rows.map(function (r) {
         return '<div class="card">' +
-          '<div class="machine-value">🚜 ' + r['เครื่องจักร/ทะเบียน'] + '</div>' +
+          '<div class="machine-value">🚜 ' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</div>' +
           '<div class="row"><span class="label">สถานะ</span><span>' + r['สถานะเดิม'] + ' → ' + r['สถานะใหม่'] + '</span></div>' +
           '<div class="row"><span class="label">บันทึกเมื่อ</span><span>' + r['วันที่บันทึก'] + '</span></div>' +
           '<div class="row"><span class="label">โดย</span><span>' + r['ผู้บันทึก'] + '</span></div>' +
