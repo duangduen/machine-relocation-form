@@ -324,15 +324,15 @@
   <h1>🚚 คิวงานย้ายเครื่องจักร</h1>
 
   <div class="tab-nav">
-    <button type="button" id="drv-tabBtn-active" class="active" onclick="drvShowTab('active')">คิวงาน</button>
+    <button type="button" id="drv-tabBtn-mine" class="active" onclick="drvShowTab('mine')">งานของฉัน</button>
+    <button type="button" id="drv-tabBtn-queue" onclick="drvShowTab('queue')">คิวงาน<span id="drv-queueBadge" class="badge" style="display:none;margin-left:4px;"></span></button>
     <button type="button" id="drv-tabBtn-history" onclick="drvShowTab('history')">ประวัติ</button>
   </div>
 
-  <div id="drv-tab-active">
-    <h2>งานของฉัน (รับแล้ว ยังไม่เสร็จ)</h2>
+  <div id="drv-tab-mine">
     <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
-
-    <h2>คิวเปิด (ยังไม่มีใครรับ)</h2>
+  </div>
+  <div id="drv-tab-queue" style="display:none;">
     <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-history" style="display:none;">
@@ -727,7 +727,7 @@
 
   /** เรียก Apps Script Web App แทน google.script.run เดิม - เก็บชื่อ/รูปแบบเรียกไว้เหมือนเดิมทุกจุดที่ใช้
    *  ข้างในเปลี่ยนจาก fetch() เป็น JSONP (อ่าน+เขียนข้อมูลเกือบทั้งหมด) / hidden-iframe form
-   *  (เฉพาะ markMoved ที่มีรูปแนบ) เพื่อเลี่ยงปัญหา CORS ใน LINE iOS in-app browser
+   *  (เฉพาะ markMoved ตอนมีรูปแนบขนาดใหญ่จริงๆ) เพื่อเลี่ยงปัญหา CORS ใน LINE iOS in-app browser
    *  - ดูรายละเอียดที่ jsonpRequest / formPostRequest ด้านบน */
   function callServer(fnName) {
     var args = Array.prototype.slice.call(arguments, 1);
@@ -749,11 +749,24 @@
     if (POST_ACTION_ARGS.hasOwnProperty(fnName)) {
       var keys2 = POST_ACTION_ARGS[fnName];
       var fields = { action: fnName };
+      var qs2 = 'action=' + fnName;
       keys2.forEach(function (k, i) {
         var v = args[i];
         if (v != null && typeof v === 'object') v = JSON.stringify(v);
         fields[k] = v;
+        qs2 += '&' + k + '=' + encodeURIComponent(v == null ? '' : v);
       });
+      // เดิม markMoved ส่งผ่าน hidden-iframe-form POST เสมอ (รับ postMessage ตอบกลับจาก iframe) แต่เจอ
+      // บั๊กจริงในโปรดักชัน: บันทึกลง sheet สำเร็จ แต่ postMessage ไม่ถึงฝั่ง parent บางเครื่อง/เบราว์เซอร์
+      // ทำให้ promise ค้างตลอดไป หน้าเว็บเลยดูเหมือนไม่ได้บันทึก (ทั้งที่จริงบันทึกแล้ว) - แก้โดยลองส่งผ่าน
+      // JSONP ก่อนเสมอถ้า query string สั้นพอ (ไม่มีรูปแนบ หรือรูปเล็กพอ) เพราะ JSONP พิสูจน์แล้วว่าเชื่อถือ
+      // ได้กว่า เหลือแค่กรณีรูปใหญ่จริงๆ เกินขีดจำกัดความยาว URL เท่านั้นที่ยัง fallback ไปใช้ฟอร์มซ่อน
+      if (qs2.length < 6000) {
+        return jsonpRequest(qs2).then(function (result) {
+          if (!result.ok) throw new Error(result.error || 'unknown error');
+          return result.data;
+        });
+      }
       return formPostRequest(fields).then(function (result) {
         if (!result.ok) throw new Error(result.error || 'unknown error');
         return result.data;
@@ -896,9 +909,13 @@
         return;
       }
       CURRENT_ROLES = info.roles;
-      // รอโหลดแผนที่ประเภทรถให้เสร็จก่อนโชว์แท็บแรก กันปัญหาการ์ดชุดแรกที่เห็นไม่มีประเภทต่อท้าย (ต้องรีเฟรช
-      // แท็บเองถึงจะขึ้น) - ใช้ await เพราะ callServer (JSONP) เป็น request สั้นๆ ไม่ทำให้หน้าล่าช้าเห็นได้ชัด
-      await loadMachineTypeMap_();
+      // ไม่ await ตรงนี้แล้ว (เดิมรอโหลดแผนที่ประเภทรถให้เสร็จก่อนถึงจะโชว์แท็บแรก ทำให้หน้าแรกช้าลงอีกหนึ่ง
+      // รอบ request) - ปล่อยให้โหลดคู่ขนานกับแท็บแรกไปเลย การ์ดชุดแรกอาจยังไม่มีประเภทต่อท้าย (โชว์แค่รหัส
+      // เฉยๆ ชั่วคราว) แต่พอโหลดเสร็จจะรีเฟรชแท็บที่เปิดอยู่ให้อัตโนมัติด้านล่าง (ดู .then ท้ายบรรทัดนี้)
+      loadMachineTypeMap_().then(function () {
+        var activeBtn = document.querySelector('#role-switcher button.active');
+        if (activeBtn) switchTab_(activeBtn);
+      });
       showRoleSwitcher(info.roles);
 
       // รองรับ deep link จาก Rich Menu เช่น ?tab=lookup / ?tab=report เปิดหน้าที่ต้องการทันที
@@ -1590,8 +1607,14 @@
   }
 
   /* ============================= คนขับ ============================= */
-  function drvInit() { drvLoadAll(); }
+  /** เดิมโหลด "งานของฉัน" + "คิวเปิด" พร้อมกันทุกครั้งที่เข้าแท็บคนขับ (2 request ซ้อนกัน) ทำให้หน้าแรก
+   *  โหลดช้า เปลี่ยนเป็นโหลดแค่ "งานของฉัน" (แท็บที่เห็นก่อน) ตอนเข้าหน้าแรก ส่วนคิวเปิดค่อยโหลดตอนกดแท็บ
+   *  "คิวงาน" จริงๆ (ดู drvShowTab) - ตัด request ของคิวเปิดออกจากตอนเข้าหน้าแรกไปเลย เหลือแค่ 1 request
+   *  (งานของฉัน) แทนที่จะยิง 2 request พร้อมกันเหมือนเดิม ทำให้หน้าแรกของคนขับโหลดเร็วขึ้นชัดเจน */
+  function drvInit() { drvLoadMyJobs(); }
   function drvLoadAll() { drvLoadMyJobs(); drvLoadOpenQueue(); }
+
+  var drvOpenQueueCache_ = null; // แคชผลลัพธ์ล่าสุดของ drvLoadOpenQueue ไว้ใช้ render ทันทีตอนกลับเข้าแท็บ "คิวงาน" ซ้ำ (ไม่ต้องรอโหลดซ้ำ)
 
   // เก็บแคชแถวข้อมูลงานที่รับไว้ล่าสุด ไว้ใช้ prefill เลขไมล์ต้นทางที่เคยบันทึกไว้ (ถ้ามี) ตอนเปิดฟอร์ม
   // "ย้ายเสร็จแล้ว" (ดู drvOpenMovedForm) กันคนขับต้องจำ/เปิดหาเลขไมล์เดิมเอง
@@ -1623,23 +1646,39 @@
     });
   }
 
+  /** วาดการ์ดคิวเปิดจาก rows ที่มีอยู่แล้ว (ไม่ยิง request ใหม่) - แยกออกมาจาก drvLoadOpenQueue เพื่อให้
+   *  drvShowTab เอาไปใช้ render ทันทีจากแคช drvOpenQueueCache_ ได้เลยตอนกลับเข้าแท็บ "คิวงาน" ซ้ำ
+   *  (ไม่ต้องรอโหลดซ้ำ เห็นผลไวขึ้น ก่อนที่จะยิง request จริงทับอีกทีเพื่อความสด) */
+  function drvRenderOpenQueue_(rows) {
+    var el = document.getElementById('drv-openQueue');
+    if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานในคิว</div>'; return; }
+    el.innerHTML = rows.map(function (r) {
+      var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+      var id = r['Request ID'];
+      return '<div class="card' + urgentClass + '">' +
+        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
+        '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
+        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
+        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+        '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
+        '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
+        '</div>';
+    }).join('');
+  }
+
   function drvLoadOpenQueue() {
     callServer('listOpenQueue', CURRENT_USER.userId).then(function (rows) {
-      var el = document.getElementById('drv-openQueue');
-      if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานในคิว</div>'; return; }
-      el.innerHTML = rows.map(function (r) {
-        var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
-        var id = r['Request ID'];
-        return '<div class="card' + urgentClass + '">' +
-          (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
-          '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
-          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-          '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
-          '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
-          '</div>';
-      }).join('');
+      drvOpenQueueCache_ = rows;
+      drvRenderOpenQueue_(rows);
+      drvUpdateQueueBadge_(rows.length);
     });
+  }
+
+  function drvUpdateQueueBadge_(count) {
+    var badge = document.getElementById('drv-queueBadge');
+    if (!badge) return;
+    if (count) { badge.textContent = count; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
   }
 
   function drvClaim(id, btn) {
@@ -1771,17 +1810,30 @@
         var formBox = document.getElementById('drv-form-' + id);
         var card = formBox && formBox.closest('.card');
         if (card) card.remove();
-        drvLoadAll();
+        drvLoadMyJobs(); // ย้ายเสร็จไม่กระทบคิวเปิด รีเฟรชแค่ "งานของฉัน" พอ (คิวงานจะโหลดใหม่เองตอนกดเข้าแท็บ)
       })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
+  /** 3 แท็บแยกกัน: งานของฉัน (mine) / คิวงาน (queue) / ประวัติ (history) - เดิมงานของฉันกับคิวเปิดอยู่
+   *  ในแท็บเดียวกัน (เลื่อนต่อกันยาว) ทำให้คนขับไม่เลื่อนลงไปดูคิวเปิด พลาดงานใหม่ที่เพิ่งเข้ามา แยกแท็บ
+   *  ให้เห็นชัดเจนแทน - แท็บคิวงานโหลดข้อมูลจริงแค่ตอนกดเข้ามาครั้งแรก (lazy) ถ้ามีแคชจาก badge
+   *  count ตอนเข้าแอปแล้ว (drvOpenQueueCache_) ก็ render จากแคชทันทีโดยไม่ต้องรอโหลดซ้ำ */
   function drvShowTab(tab) {
-    document.getElementById('drv-tab-active').style.display = tab === 'active' ? 'block' : 'none';
+    document.getElementById('drv-tab-mine').style.display = tab === 'mine' ? 'block' : 'none';
+    document.getElementById('drv-tab-queue').style.display = tab === 'queue' ? 'block' : 'none';
     document.getElementById('drv-tab-history').style.display = tab === 'history' ? 'block' : 'none';
-    document.getElementById('drv-tabBtn-active').classList.toggle('active', tab === 'active');
+    document.getElementById('drv-tabBtn-mine').classList.toggle('active', tab === 'mine');
+    document.getElementById('drv-tabBtn-queue').classList.toggle('active', tab === 'queue');
     document.getElementById('drv-tabBtn-history').classList.toggle('active', tab === 'history');
-    if (tab === 'active') drvLoadAll(); else drvLoadHistory();
+    if (tab === 'mine') {
+      drvLoadMyJobs();
+    } else if (tab === 'queue') {
+      if (drvOpenQueueCache_) { drvRenderOpenQueue_(drvOpenQueueCache_); } // โชว์แคชก่อนทันที เห็นผลไวกว่ารอ
+      drvLoadOpenQueue(); // แล้วค่อยโหลดข้อมูลจริงทับอีกที กันข้อมูลเก่าค้าง (เผื่อมีงานใหม่เข้ามาระหว่างนั้น)
+    } else {
+      drvLoadHistory();
+    }
   }
 
   function drvLoadHistory() {
