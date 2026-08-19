@@ -485,10 +485,11 @@
   </div>
 </div>
 
-<!-- ============ Modal แก้ไขวันที่/เวลาย้ายเสร็จ (ใช้เลือกวันที่-เวลาแทนการพิมพ์เอง กันกรอกผิด) ============ -->
+<!-- ============ Modal เลือกวันที่/เวลา (ใช้ทั้งแก้ไขวันที่ย้ายเสร็จ และระบุวันที่ย้ายเสร็จของเครื่องจักร
+     ขับเคลื่อนตัวเอง - เลือกวันที่-เวลาแทนการพิมพ์เอง กันกรอกผิด) ============ -->
 <div id="editDateTimeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2000; align-items:center; justify-content:center; padding:16px;">
   <div class="card" style="width:100%; max-width:320px; margin:0; border-left-color:var(--primary);">
-    <h2 style="margin-top:0;">แก้ไขวันที่/เวลาย้ายเสร็จ</h2>
+    <h2 id="editDateTimeModal-title" style="margin-top:0;">แก้ไขวันที่/เวลาย้ายเสร็จ</h2>
     <label>วันที่</label>
     <input type="date" id="editDateTimeModal-date">
     <label>เวลา</label>
@@ -719,7 +720,7 @@
     claimJobsAsTrip: ['userId', 'requestIds'],
     recordStartMileage: ['userId', 'requestId', 'mileage'],
     releaseJob: ['userId', 'requestId'],
-    markMovedSelfPropelled: ['userId', 'requestId'],
+    markMovedSelfPropelled: ['userId', 'requestId', 'actualDate'],
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
@@ -1473,20 +1474,18 @@
             '</div>' : '') +
           (canSelfReport ?
             '<div class="card-actions">' +
-            '<button class="success" onclick="reqMarkMovedSelf(\'' + id + '\', this)">✅ ย้ายเสร็จแล้ว (ขับเคลื่อนตัวเอง)</button>' +
+            '<button class="success" onclick="reqMarkMovedSelfPrompt(\'' + id + '\')">✅ ย้ายเสร็จแล้ว (ขับเคลื่อนตัวเอง)</button>' +
             '</div>' : '') +
           '</div>';
       }).join('');
     });
   }
 
-  /** ช่างคุมงานกดแจ้งย้ายเสร็จเอง กรณีเครื่องจักรขับเคลื่อนตัวเองได้ (ไม่ต้องผ่านคนขับ) - ไม่ต้องกรอกเลขไมล์/แนบรูป */
-  function reqMarkMovedSelf(id, btn) {
-    if (!confirm('ยืนยันว่าย้ายเครื่องจักร #' + id + ' เสร็จแล้ว?')) return;
-    btn.disabled = true;
-    callServer('markMovedSelfPropelled', CURRENT_USER.userId, id)
-      .then(function () { showToast('บันทึกย้ายเสร็จแล้ว'); reqLoadMyList(); })
-      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  /** ช่างคุมงานกดแจ้งย้ายเสร็จเอง กรณีเครื่องจักรขับเคลื่อนตัวเองได้ (ไม่ต้องผ่านคนขับ) - ไม่บังคับกรอกเลขไมล์/
+   *  แนบรูป แต่ให้เลือกวันที่-เวลาที่ย้ายเสร็จจริงเอง (ใช้ modal เดียวกับ editMovedDateTimePrompt) เพราะช่าง
+   *  มักมากดแจ้งย้อนหลัง ถ้าใช้เวลาปัจจุบันเสมอจะไม่ตรงกับเวลาที่ย้ายจริง (แก้ 19 ส.ค. 2569) */
+  function reqMarkMovedSelfPrompt(id) {
+    openDateTimeModal_('markMovedSelfPropelled', id, reqLoadMyList, '', 'ระบุวันที่-เวลาที่ย้ายเสร็จจริง');
   }
 
   /* ============================= ผู้อนุมัติ ============================= */
@@ -1949,16 +1948,19 @@
     return { date: yyyy + '-' + mm + '-' + dd, time: hh + ':' + mi };
   }
 
-  var editDateTimeModalState = null; // { id, reloadFn }
+  var editDateTimeModalState = null; // { action, id, reloadFn }
 
   /**
-   * แก้ไขวันที่-เวลาย้ายเสร็จ กรณีคนขับกดผิด/เวลาคลาดเคลื่อน (ดู spec ข้อ 3.2 - editMovedDateTime ใน Requests.gs)
-   * เปิดโมดัลให้ "เลือก" วันที่/เวลา (input type=date + type=time) แทนการให้พิมพ์ข้อความเอง กันกรอกผิดรูปแบบ
-   * currentValue: ค่าดั้งเดิม "วันที่ขนย้ายจริง" ของแถวนั้น ใช้เติมค่าเริ่มต้นในโมดัลให้ตรงกับของเดิม
+   * เปิด modal เลือกวันที่-เวลา แบบใช้ซ้ำได้ (generic) - เดิมมีไว้เฉพาะแก้ไขวันที่ย้ายเสร็จของคนขับ
+   * (editMovedDateTimePrompt ด้านล่าง) เพิ่ม action/title พารามิเตอร์เข้ามาให้เรียกใช้กับ action อื่นได้ด้วย
+   * (ดู reqMarkMovedSelfPrompt - ให้ช่างระบุวันที่ย้ายเสร็จเองตอนกดย้ายเสร็จของเครื่องขับเคลื่อนตัวเองได้
+   * เพราะบางทีช่างมากดย้อนหลัง ไม่ตรงกับเวลาที่ย้ายจริง - แก้ 19 ส.ค. 2569)
+   * currentValue: ค่าดั้งเดิม (ถ้ามี) ใช้เติมค่าเริ่มต้นในโมดัลให้ตรงกับของเดิม ไม่มีก็เติมเวลาปัจจุบันแทน
    */
-  function editMovedDateTimePrompt(id, reloadFn, currentValue) {
-    editDateTimeModalState = { id: id, reloadFn: reloadFn };
-    var parsed = parseThaiDateTimeToInputs_(currentValue);
+  function openDateTimeModal_(action, id, reloadFn, currentValue, title) {
+    editDateTimeModalState = { action: action, id: id, reloadFn: reloadFn };
+    document.getElementById('editDateTimeModal-title').textContent = title;
+    var parsed = currentValue ? parseThaiDateTimeToInputs_(currentValue) : null;
     if (!parsed) {
       var now = new Date();
       var pad = function (n) { return (n < 10 ? '0' : '') + n; };
@@ -1970,6 +1972,15 @@
     document.getElementById('editDateTimeModal-date').value = parsed.date;
     document.getElementById('editDateTimeModal-time').value = parsed.time;
     document.getElementById('editDateTimeModal').style.display = 'flex';
+  }
+
+  /**
+   * แก้ไขวันที่-เวลาย้ายเสร็จ กรณีคนขับกดผิด/เวลาคลาดเคลื่อน (ดู spec ข้อ 3.2 - editMovedDateTime ใน Requests.gs)
+   * เปิดโมดัลให้ "เลือก" วันที่/เวลา (input type=date + type=time) แทนการให้พิมพ์ข้อความเอง กันกรอกผิดรูปแบบ
+   * currentValue: ค่าดั้งเดิม "วันที่ขนย้ายจริง" ของแถวนั้น ใช้เติมค่าเริ่มต้นในโมดัลให้ตรงกับของเดิม
+   */
+  function editMovedDateTimePrompt(id, reloadFn, currentValue) {
+    openDateTimeModal_('editMovedDateTime', id, reloadFn, currentValue, 'แก้ไขวันที่/เวลาย้ายเสร็จ');
   }
 
   function closeEditDateTimeModal() {
@@ -1985,10 +1996,14 @@
     if (!timeVal) return showToast('กรุณาเลือกเวลา');
     var m = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     var newDateTime = m[3] + '/' + m[2] + '/' + m[1] + ' ' + timeVal;
+    var action = editDateTimeModalState.action;
     var id = editDateTimeModalState.id;
     var reloadFn = editDateTimeModalState.reloadFn;
-    callServer('editMovedDateTime', CURRENT_USER.userId, id, newDateTime)
-      .then(function () { showToast('แก้ไขแล้ว'); closeEditDateTimeModal(); if (reloadFn) reloadFn(); })
+    var call = action === 'markMovedSelfPropelled'
+      ? callServer('markMovedSelfPropelled', CURRENT_USER.userId, id, newDateTime)
+      : callServer('editMovedDateTime', CURRENT_USER.userId, id, newDateTime);
+    call
+      .then(function () { showToast(action === 'markMovedSelfPropelled' ? 'บันทึกย้ายเสร็จแล้ว' : 'แก้ไขแล้ว'); closeEditDateTimeModal(); if (reloadFn) reloadFn(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
@@ -2023,9 +2038,11 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีคำขอ</div>'; return; }
       el.innerHTML = rows.map(function (r) {
         var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
+        var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
         return '<div class="card' + urgentClass + '">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
           '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
+          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -2138,9 +2155,11 @@
     if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
     el.innerHTML = rows.map(function (r) {
       var isClosed = r['สถานะการย้าย (แกน A)'] === 'ปิดงาน';
+      var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
+        (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
