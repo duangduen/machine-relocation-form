@@ -343,8 +343,8 @@
     <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-queue" style="display:none;">
-    <div style="font-size:11px;color:#888;margin:0 0 6px;">ขนหลายคันไปพร้อมกันบนรถคันเดียว (เที่ยวเดียวกัน)? ติ๊กเลือกได้หลายรายการแล้วกดปุ่มด้านล่าง</div>
-    <button type="button" id="drv-claimSelectedBtn" class="secondary" onclick="drvClaimSelected()" style="margin-bottom:8px;">รับงานที่เลือก (0)</button>
+    <div style="font-size:11px;color:#888;margin:0 0 6px;">ติ๊กเลือกงานที่จะรับ (เลือกได้หลายรายการถ้าขนพร้อมกันบนรถคันเดียว) แล้วกดปุ่มด้านล่างเพื่อรับงาน</div>
+    <button type="button" id="drv-claimSelectedBtn" class="success" onclick="drvClaimSelected()" style="margin-bottom:8px;" disabled>ติ๊กเลือกงานที่จะรับก่อน</button>
     <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-history" style="display:none;">
@@ -1700,28 +1700,33 @@
       return '<div class="card' + urgentClass + '">' +
         (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
         '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
-        '<input type="checkbox" class="drv-queueCheck" value="' + id + '" onchange="drvUpdateSelectedCount_()" style="width:auto;"> เลือกเที่ยวรถนี้' +
+        '<input type="checkbox" class="drv-queueCheck" value="' + id + '" onchange="drvUpdateSelectedCount_()" style="width:auto;"> เลือกงานนี้' +
         '</label>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
-        '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
         '</div>';
     }).join('');
     drvUpdateSelectedCount_();
   }
 
-  /** อัปเดตข้อความปุ่ม "รับงานที่เลือก (N)" ตามจำนวน checkbox ที่ติ๊กไว้ในคิวเปิด */
+  /** อัปเดตปุ่มรับงาน (ข้อความ + เปิด/ปิดการกดได้) ตามจำนวน checkbox ที่ติ๊กไว้ในคิวเปิด
+   *  0 รายการ = ปิดปุ่ม, 1 รายการ = "รับงานนี้", 2+ รายการ = "รับงานที่เลือกเป็นเที่ยวเดียวกัน (N)"
+   *  (แก้ 19 ส.ค. 2569 - เดิมมีทั้งปุ่ม "รับงานนี้" ต่อการ์ด และปุ่ม "รับงานที่เลือก" รวมด้านบน 2 ทางพร้อมกัน
+   *  ทำให้สับสนว่าติ๊กแล้วต้องกดปุ่มไหน ตัดเหลือทางเดียว - ติ๊กแล้วกดปุ่มเดียวด้านบนเสมอ ไม่ว่าจะรับกี่รายการ) */
   function drvUpdateSelectedCount_() {
     var btn = document.getElementById('drv-claimSelectedBtn');
     if (!btn) return;
-    var checks = document.querySelectorAll('.drv-queueCheck:checked');
-    btn.textContent = 'รับงานที่เลือก (' + checks.length + ')';
+    var count = document.querySelectorAll('.drv-queueCheck:checked').length;
+    btn.disabled = count === 0;
+    btn.textContent = count === 0 ? 'ติ๊กเลือกงานที่จะรับก่อน'
+      : count === 1 ? 'รับงานนี้'
+      : 'รับงานที่เลือกเป็นเที่ยวเดียวกัน (' + count + ')';
   }
 
-  /** รับงานที่ติ๊กเลือกไว้พร้อมกันเป็นเที่ยวเดียวกัน (feature: เที่ยวรถ - ขนหลายคันบนรถคันเดียว 19 ส.ค. 2569)
-   *  เลือก 1 รายการ = รับงานเดี่ยวเหมือน drvClaim ปกติ, เลือก 2+ รายการ = ผูกเป็นเที่ยวรถเดียวกัน (บันทึก
+  /** รับงานที่ติ๊กเลือกไว้ (feature: เที่ยวรถ - ขนหลายคันบนรถคันเดียว 19 ส.ค. 2569)
+   *  เลือก 1 รายการ = รับงานเดี่ยวตามปกติ, เลือก 2+ รายการ = ผูกเป็นเที่ยวรถเดียวกัน (บันทึก
    *  เลขไมล์/รูปหลักฐาน/เวลาย้ายเสร็จพร้อมกันทีเดียวตอนแจ้งเสร็จ ไม่ต้องกรอกซ้ำทีละคำขอ) */
   function drvClaimSelected() {
     var checks = document.querySelectorAll('.drv-queueCheck:checked');
@@ -1734,8 +1739,7 @@
       : callServer('claimJobsAsTrip', CURRENT_USER.userId, ids);
     call
       .then(function () { showToast(ids.length > 1 ? 'รับงานเป็นเที่ยวเดียวกันแล้ว (' + ids.length + ' รายการ)' : 'รับงานแล้ว'); drvLoadAll(); })
-      .catch(function (err) { showToast('ผิดพลาด: ' + err); })
-      .finally(function () { btn.disabled = false; });
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
   function drvLoadOpenQueue() {
@@ -1751,13 +1755,6 @@
     if (!badge) return;
     if (count) { badge.textContent = count; badge.style.display = 'inline-block'; }
     else { badge.style.display = 'none'; }
-  }
-
-  function drvClaim(id, btn) {
-    btn.disabled = true;
-    callServer('claimJob', CURRENT_USER.userId, id)
-      .then(function () { showToast('รับงานแล้ว'); drvLoadAll(); })
-      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
   /**
