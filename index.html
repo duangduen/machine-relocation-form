@@ -180,6 +180,10 @@
 
 <div id="loading-overlay"><span id="loading-overlay-text">กำลังตรวจสอบสิทธิ์ผู้ใช้งาน...</span></div>
 
+<div id="test-mode-banner" style="display:none;background:#c62828;color:#fff;font-weight:700;text-align:center;padding:8px 10px;font-size:13px;">
+  🧪 โหมดทดสอบ (Test Mode) — แจ้งเตือนทั้งหมดจะส่งเข้าแชทของผู้ดูแลระบบคนเดียว ไม่ส่งถึงผู้ใช้จริง
+</div>
+
 <div class="app-header">
   <h1>🚜 ระบบขอย้ายเครื่องจักร</h1>
   <div id="profile-bar"></div>
@@ -240,6 +244,12 @@
       <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
       <datalist id="req-machineList"></datalist>
       <div id="req-machineWarning" style="display:none;font-size:12px;font-weight:600;color:#c62828;background:#ffebee;border-radius:8px;padding:8px 10px;margin:-6px 0 10px;"></div>
+
+      <label style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+        <input type="checkbox" id="req-selfPropelled" style="width:auto;">
+        🚜 เครื่องนี้ขับเคลื่อนตัวเองได้ (ไม่ต้องใช้คนขับ/รถขนส่ง เช่น รถน้ำ)
+      </label>
+      <div style="font-size:11px;color:#888;margin:-6px 0 10px;">ระบบจะติ๊กให้อัตโนมัติตามข้อมูลในทะเบียนเครื่องจักร แก้ไขเองได้ถ้าครั้งนี้ต้องใช้รถลาก/คนขับช่วย</div>
 
       <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
       <input id="req-origin" list="req-originList" placeholder="เลือกเครื่องจักรก่อน" autocomplete="off">
@@ -333,6 +343,8 @@
     <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-queue" style="display:none;">
+    <div style="font-size:11px;color:#888;margin:0 0 6px;">ขนหลายคันไปพร้อมกันบนรถคันเดียว (เที่ยวเดียวกัน)? ติ๊กเลือกได้หลายรายการแล้วกดปุ่มด้านล่าง</div>
+    <button type="button" id="drv-claimSelectedBtn" class="secondary" onclick="drvClaimSelected()" style="margin-bottom:8px;">รับงานที่เลือก (0)</button>
     <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-history" style="display:none;">
@@ -656,8 +668,10 @@
     approveRequest: 'approveRequest',
     rejectRequest: 'rejectRequest',
     claimJob: 'claimJob',
+    claimJobsAsTrip: 'claimJobsAsTrip',
     recordStartMileage: 'recordStartMileage',
     releaseJob: 'releaseJob',
+    markMovedSelfPropelled: 'markMovedSelfPropelled',
     editRequestFields: 'editRequestFields',
     issuePjNumber: 'issuePjNumber',
     closeJob: 'closeJob',
@@ -702,8 +716,10 @@
     approveRequest: ['userId', 'requestId'],
     rejectRequest: ['userId', 'requestId', 'reason'],
     claimJob: ['userId', 'requestId'],
+    claimJobsAsTrip: ['userId', 'requestIds'],
     recordStartMileage: ['userId', 'requestId', 'mileage'],
     releaseJob: ['userId', 'requestId'],
+    markMovedSelfPropelled: ['userId', 'requestId'],
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
@@ -886,6 +902,9 @@
       stage = 'whoAmI (backend API)';
       var info = await callServer('whoAmI', profile.userId);
       hideLoadingOverlay();
+      // โหมดทดสอบ (LINE_TEST_MODE/TELEGRAM_TEST_MODE ใน Config.gs) - โชว์แบนเนอร์แดงเตือนไว้ตลอดเวลาที่เปิดอยู่
+      // กันสับสนว่าทำไมแจ้งเตือนไม่ไปหาคนจริง (19 ส.ค. 2569 - ใช้ตอนทดสอบฟีเจอร์ใหม่ก่อนเปิดใช้งานจริง)
+      document.getElementById('test-mode-banner').style.display = info.testMode ? 'block' : 'none';
       if (!info.registered || !info.roles || !info.roles.length) {
         // แสดง LINE User ID ของตัวเองพร้อมปุ่มคัดลอก ให้คนที่ยังไม่ได้ลงทะเบียนกดคัดลอกส่งให้แอดมิน/เสมียน1
         // ได้เลยทันที (ก่อนหน้านี้มีแค่ข้อความบอกว่ายังไม่ได้ลงทะเบียน ไม่มี ID ให้เอาไปใช้ต่อ ต้องไปหาทางอื่น
@@ -1256,6 +1275,9 @@
             // เลือกเครื่องจักรที่มีในทะเบียนตามปกติ - auto-fill ต้นทางจากตำแหน่งปัจจุบันในระบบ
             reqSelectedMachine = m;
             document.getElementById('req-origin').value = m.currentSite;
+            // ติ๊ก "ขับเคลื่อนตัวเองได้" ให้อัตโนมัติตาม flag ในทะเบียนเครื่องจักร (ช่างแก้ไขเองได้ทีหลัง
+            // ถ้าครั้งนี้ต้องใช้รถลาก/คนขับช่วย - ดู resolveSelfPropelled_ ใน Requests.gs)
+            document.getElementById('req-selfPropelled').checked = !!m.selfPropelled;
             // เตือน (ไม่บล็อก) ถ้าเครื่องที่เลือกไม่พร้อมใช้งาน (feature: เสมียน4 ซ่อมบำรุง) - ตามที่ตกลงกันไว้
             // ว่ายังให้เลือกได้เผื่อมีเคสต้องย้ายเครื่องที่พัง/กำลังซ่อมไปอู่ซ่อม แค่ขึ้นเตือนให้ระวัง
             if (m.maintStatus && isMachineNotReady_(m.maintStatus)) {
@@ -1323,6 +1345,7 @@
     document.getElementById('req-wantedDate').value = '';
     document.getElementById('req-note').value = '';
     document.getElementById('req-machineWarning').style.display = 'none';
+    document.getElementById('req-selfPropelled').checked = false;
     reqSelectedMachine = null;
     reqSetUrgency(false);
   }
@@ -1352,6 +1375,7 @@
     document.getElementById('req-destination').value = r['ปลายทาง'] || '';
     document.getElementById('req-wantedDate').value = toDateInputValue_(r['วันที่ต้องการย้าย']);
     document.getElementById('req-note').value = r['Comment/หมายเหตุ'] || '';
+    document.getElementById('req-selfPropelled').checked = r['ขับเคลื่อนตัวเอง'] === 'Y';
     reqSetUrgency(r['ความเร่งด่วน'] === 'ด่วน');
 
     document.getElementById('req-editBannerId').textContent = '#' + id;
@@ -1394,7 +1418,8 @@
       destinationName: matchedSite ? matchedSite.name : destinationTyped, // ชื่อล้วนไม่มีรหัสนำหน้า ใช้เช็คหน้างานซ้ำฝั่ง server
       wantedDate: document.getElementById('req-wantedDate').value,
       urgency: reqIsUrgent ? 'ด่วน' : 'ไม่ด่วน',
-      note: document.getElementById('req-note').value
+      note: document.getElementById('req-note').value,
+      selfPropelled: document.getElementById('req-selfPropelled').checked
     };
 
     var isEdit = !!reqEditingId;
@@ -1430,9 +1455,12 @@
         reqMyRequestsCache[id] = r;
         var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
         var isPending = r['สถานะการย้าย (แกน A)'] === 'รออนุมัติ';
+        var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
+        var canSelfReport = isSelfPropelled && r['สถานะการย้าย (แกน A)'] === 'อนุมัติแล้ว รอคนขับรับงาน';
         return '<div class="card' + urgentClass + '">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
+          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -1443,9 +1471,22 @@
             '<button class="secondary" onclick="reqEditRequest(\'' + id + '\')">แก้ไข</button>' +
             '<button class="danger" onclick="reqCancelRequest(\'' + id + '\', this)">ยกเลิกคำขอ</button>' +
             '</div>' : '') +
+          (canSelfReport ?
+            '<div class="card-actions">' +
+            '<button class="success" onclick="reqMarkMovedSelf(\'' + id + '\', this)">✅ ย้ายเสร็จแล้ว (ขับเคลื่อนตัวเอง)</button>' +
+            '</div>' : '') +
           '</div>';
       }).join('');
     });
+  }
+
+  /** ช่างคุมงานกดแจ้งย้ายเสร็จเอง กรณีเครื่องจักรขับเคลื่อนตัวเองได้ (ไม่ต้องผ่านคนขับ) - ไม่ต้องกรอกเลขไมล์/แนบรูป */
+  function reqMarkMovedSelf(id, btn) {
+    if (!confirm('ยืนยันว่าย้ายเครื่องจักร #' + id + ' เสร็จแล้ว?')) return;
+    btn.disabled = true;
+    callServer('markMovedSelfPropelled', CURRENT_USER.userId, id)
+      .then(function () { showToast('บันทึกย้ายเสร็จแล้ว'); reqLoadMyList(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
   /* ============================= ผู้อนุมัติ ============================= */
@@ -1629,7 +1670,9 @@
         var id = r['Request ID'];
         drvMyJobsCache[id] = r;
         var startMileage = r['เลขไมล์ต้นทาง'];
+        var tripId = r['รหัสเที่ยวรถ'];
         return '<div class="card">' +
+          (tripId ? '<span class="badge">🚛 เที่ยวรถ ' + tripId + ' (บันทึกเลขไมล์/ย้ายเสร็จพร้อมกันทุกคำขอในเที่ยวนี้)</span>' : '') +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -1657,6 +1700,9 @@
       var id = r['Request ID'];
       return '<div class="card' + urgentClass + '">' +
         (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
+        '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+        '<input type="checkbox" class="drv-queueCheck" value="' + id + '" onchange="drvUpdateSelectedCount_()" style="width:auto;"> เลือกเที่ยวรถนี้' +
+        '</label>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -1664,6 +1710,33 @@
         '<button onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
         '</div>';
     }).join('');
+    drvUpdateSelectedCount_();
+  }
+
+  /** อัปเดตข้อความปุ่ม "รับงานที่เลือก (N)" ตามจำนวน checkbox ที่ติ๊กไว้ในคิวเปิด */
+  function drvUpdateSelectedCount_() {
+    var btn = document.getElementById('drv-claimSelectedBtn');
+    if (!btn) return;
+    var checks = document.querySelectorAll('.drv-queueCheck:checked');
+    btn.textContent = 'รับงานที่เลือก (' + checks.length + ')';
+  }
+
+  /** รับงานที่ติ๊กเลือกไว้พร้อมกันเป็นเที่ยวเดียวกัน (feature: เที่ยวรถ - ขนหลายคันบนรถคันเดียว 19 ส.ค. 2569)
+   *  เลือก 1 รายการ = รับงานเดี่ยวเหมือน drvClaim ปกติ, เลือก 2+ รายการ = ผูกเป็นเที่ยวรถเดียวกัน (บันทึก
+   *  เลขไมล์/รูปหลักฐาน/เวลาย้ายเสร็จพร้อมกันทีเดียวตอนแจ้งเสร็จ ไม่ต้องกรอกซ้ำทีละคำขอ) */
+  function drvClaimSelected() {
+    var checks = document.querySelectorAll('.drv-queueCheck:checked');
+    var ids = Array.prototype.map.call(checks, function (c) { return c.value; });
+    if (!ids.length) return showToast('กรุณาติ๊กเลือกงานที่จะรับก่อน');
+    var btn = document.getElementById('drv-claimSelectedBtn');
+    btn.disabled = true;
+    var call = ids.length === 1
+      ? callServer('claimJob', CURRENT_USER.userId, ids[0])
+      : callServer('claimJobsAsTrip', CURRENT_USER.userId, ids);
+    call
+      .then(function () { showToast(ids.length > 1 ? 'รับงานเป็นเที่ยวเดียวกันแล้ว (' + ids.length + ' รายการ)' : 'รับงานแล้ว'); drvLoadAll(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); })
+      .finally(function () { btn.disabled = false; });
   }
 
   function drvLoadOpenQueue() {
