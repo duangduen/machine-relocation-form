@@ -247,17 +247,16 @@
 
       <label style="display:flex;align-items:center;gap:8px;margin-top:4px;">
         <input type="checkbox" id="req-selfPropelled" style="width:auto;">
-        🚜 เครื่องนี้ขับเคลื่อนตัวเองได้ (ไม่ต้องใช้คนขับ/รถขนส่ง เช่น รถน้ำ)
+        🚜 ขับเคลื่อนตัวเองได้ (ไม่ต้องใช้รถขนส่ง เช่น รถน้ำ)
       </label>
-      <div style="font-size:11px;color:#888;margin:-6px 0 10px;">ระบบจะติ๊กให้อัตโนมัติตามข้อมูลในทะเบียนเครื่องจักร แก้ไขเองได้ถ้าครั้งนี้ต้องใช้รถลาก/คนขับช่วย</div>
 
       <label>ต้นทาง (ตำแหน่งปัจจุบัน)</label>
       <input id="req-origin" list="req-originList" placeholder="เลือกเครื่องจักรก่อน" autocomplete="off">
       <datalist id="req-originList"></datalist>
-      <div style="font-size:11px;color:#e65100;margin:-6px 0 10px;">ระบบดึงตำแหน่งล่าสุดจากฐานข้อมูลอัตโนมัติ ถ้าไม่ตรงกับความจริง แก้ไขในช่องนี้ได้เลย (พิมพ์ค้นหาหน้างานอื่นได้) ระบบจะแจ้งเสมียนให้ตรวจสอบ/แก้ไขข้อมูลเครื่องจักรให้ถูกต้องต่อไป (คนขับจะไปตามตำแหน่งที่กรอกในช่องนี้)</div>
+      <div style="font-size:11px;color:#e65100;margin:-6px 0 10px;">ถ้าไม่ตรงกับความจริง แก้ไขในช่องนี้ได้เลย</div>
 
       <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
-      <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย (จะมีรหัสโครงการนำหน้าให้อัตโนมัติถ้าเลือกจากลิสต์)">
+      <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย">
       <datalist id="req-siteList"></datalist>
 
       <label>วันที่ต้องการย้าย *</label>
@@ -343,8 +342,8 @@
     <div id="drv-myJobs"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-queue" style="display:none;">
-    <div style="font-size:11px;color:#888;margin:0 0 6px;">ติ๊กเลือกงานที่จะรับ (เลือกได้หลายรายการถ้าขนพร้อมกันบนรถคันเดียว) แล้วกดปุ่มด้านล่างเพื่อรับงาน</div>
-    <button type="button" id="drv-claimSelectedBtn" class="success" onclick="drvClaimSelected()" style="margin-bottom:8px;" disabled>ติ๊กเลือกงานที่จะรับก่อน</button>
+    <div style="font-size:11px;color:#888;margin:0 0 6px;">งานส่วนใหญ่กดปุ่ม "รับงานนี้" ที่การ์ดได้เลย ถ้าขนหลายคันพร้อมกันบนรถคันเดียว ให้ติ๊กเลือกอย่างน้อย 2 รายการแล้วกดปุ่มรวมด้านล่างแทน</div>
+    <button type="button" id="drv-claimSelectedBtn" class="success" onclick="drvClaimSelected()" style="margin-bottom:8px; display:none;">รับงานที่เลือกเป็นเที่ยวเดียวกัน (0)</button>
     <div id="drv-openQueue"><div class="loading">กำลังโหลด...</div></div>
   </div>
   <div id="drv-tab-history" style="display:none;">
@@ -1700,45 +1699,56 @@
       return '<div class="card' + urgentClass + '">' +
         (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
         '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
-        '<input type="checkbox" class="drv-queueCheck" value="' + id + '" onchange="drvUpdateSelectedCount_()" style="width:auto;"> เลือกงานนี้' +
+        '<input type="checkbox" class="drv-queueCheck" value="' + id + '" onchange="drvUpdateSelectedCount_()" style="width:auto;"> ขนคันนี้ไปพร้อมกับคันอื่น (เที่ยวเดียวกัน)' +
         '</label>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
+        '<button class="drv-queueClaimBtn" onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
         '</div>';
     }).join('');
     drvUpdateSelectedCount_();
   }
 
-  /** อัปเดตปุ่มรับงาน (ข้อความ + เปิด/ปิดการกดได้) ตามจำนวน checkbox ที่ติ๊กไว้ในคิวเปิด
-   *  0 รายการ = ปิดปุ่ม, 1 รายการ = "รับงานนี้", 2+ รายการ = "รับงานที่เลือกเป็นเที่ยวเดียวกัน (N)"
-   *  (แก้ 19 ส.ค. 2569 - เดิมมีทั้งปุ่ม "รับงานนี้" ต่อการ์ด และปุ่ม "รับงานที่เลือก" รวมด้านบน 2 ทางพร้อมกัน
-   *  ทำให้สับสนว่าติ๊กแล้วต้องกดปุ่มไหน ตัดเหลือทางเดียว - ติ๊กแล้วกดปุ่มเดียวด้านบนเสมอ ไม่ว่าจะรับกี่รายการ) */
+  /**
+   * สลับโหมดปุ่มรับงานตามจำนวน checkbox ที่ติ๊กไว้ในคิวเปิด (แก้ 19 ส.ค. 2569 ตามฟีดแบ็ก - งานส่วนใหญ่
+   * เป็นการรับทีละคัน อยากให้กดปุ่ม "รับงานนี้" ที่การ์ดได้เลยโดยไม่ต้องเลื่อนไปกดปุ่มรวมด้านบน)
+   *  - ติ๊กน้อยกว่า 2 รายการ (0 หรือ 1): โหมดปกติ - ปุ่ม "รับงานนี้" ที่แต่ละการ์ดกดได้ตามปกติ ปุ่มรวมด้านบนซ่อนไว้
+   *  - ติ๊กตั้งแต่ 2 รายการขึ้นไป: โหมดเที่ยวรถ - ปิดปุ่ม "รับงานนี้" ทุกการ์ดไปเลย (กันกดพลาดทีละใบตอนตั้งใจ
+   *    จะรวมเป็นเที่ยวเดียวกัน ซึ่งเป็นสาเหตุที่ทำให้สับสนมาก่อน) แล้วโชว์ปุ่มรวมด้านบนแทนให้กดทีเดียว
+   */
   function drvUpdateSelectedCount_() {
-    var btn = document.getElementById('drv-claimSelectedBtn');
-    if (!btn) return;
+    var topBtn = document.getElementById('drv-claimSelectedBtn');
+    if (!topBtn) return;
     var count = document.querySelectorAll('.drv-queueCheck:checked').length;
-    btn.disabled = count === 0;
-    btn.textContent = count === 0 ? 'ติ๊กเลือกงานที่จะรับก่อน'
-      : count === 1 ? 'รับงานนี้'
-      : 'รับงานที่เลือกเป็นเที่ยวเดียวกัน (' + count + ')';
+    var tripMode = count >= 2;
+    topBtn.style.display = tripMode ? 'inline-block' : 'none';
+    topBtn.textContent = 'รับงานที่เลือกเป็นเที่ยวเดียวกัน (' + count + ')';
+    Array.prototype.forEach.call(document.querySelectorAll('.drv-queueClaimBtn'), function (b) {
+      b.disabled = tripMode;
+    });
   }
 
-  /** รับงานที่ติ๊กเลือกไว้ (feature: เที่ยวรถ - ขนหลายคันบนรถคันเดียว 19 ส.ค. 2569)
-   *  เลือก 1 รายการ = รับงานเดี่ยวตามปกติ, เลือก 2+ รายการ = ผูกเป็นเที่ยวรถเดียวกัน (บันทึก
-   *  เลขไมล์/รูปหลักฐาน/เวลาย้ายเสร็จพร้อมกันทีเดียวตอนแจ้งเสร็จ ไม่ต้องกรอกซ้ำทีละคำขอ) */
+  /** รับงานเดี่ยวทีละใบ - ปุ่ม "รับงานนี้" บนการ์ดแต่ละใบ (ทางหลักสำหรับกรณีขนย้ายคันเดียว ซึ่งเป็นส่วนใหญ่) */
+  function drvClaim(id, btn) {
+    btn.disabled = true;
+    callServer('claimJob', CURRENT_USER.userId, id)
+      .then(function () { showToast('รับงานแล้ว'); drvLoadAll(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+  }
+
+  /** รับงานที่ติ๊กเลือกไว้พร้อมกันเป็นเที่ยวเดียวกัน (feature: เที่ยวรถ - ขนหลายคันบนรถคันเดียว 19 ส.ค. 2569)
+   *  ปุ่มนี้โผล่มาเฉพาะตอนติ๊กไว้ 2 รายการขึ้นไปเท่านั้น (ดู drvUpdateSelectedCount_) บันทึกเลขไมล์/
+   *  รูปหลักฐาน/เวลาย้ายเสร็จพร้อมกันทีเดียวตอนแจ้งเสร็จ ไม่ต้องกรอกซ้ำทีละคำขอ */
   function drvClaimSelected() {
     var checks = document.querySelectorAll('.drv-queueCheck:checked');
     var ids = Array.prototype.map.call(checks, function (c) { return c.value; });
-    if (!ids.length) return showToast('กรุณาติ๊กเลือกงานที่จะรับก่อน');
+    if (ids.length < 2) return showToast('กรุณาติ๊กเลือกอย่างน้อย 2 รายการเพื่อรวมเป็นเที่ยวเดียวกัน');
     var btn = document.getElementById('drv-claimSelectedBtn');
     btn.disabled = true;
-    var call = ids.length === 1
-      ? callServer('claimJob', CURRENT_USER.userId, ids[0])
-      : callServer('claimJobsAsTrip', CURRENT_USER.userId, ids);
-    call
-      .then(function () { showToast(ids.length > 1 ? 'รับงานเป็นเที่ยวเดียวกันแล้ว (' + ids.length + ' รายการ)' : 'รับงานแล้ว'); drvLoadAll(); })
+    callServer('claimJobsAsTrip', CURRENT_USER.userId, ids)
+      .then(function () { showToast('รับงานเป็นเที่ยวเดียวกันแล้ว (' + ids.length + ' รายการ)'); drvLoadAll(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
@@ -1911,8 +1921,11 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
       el.innerHTML = rows.map(function (r) {
         var isClosed = r['สถานะการย้าย (แกน A)'] === 'ปิดงาน';
+        // มีรหัสเที่ยวรถ = คันนี้ขนไปพร้อมกับคันอื่นในรถคันเดียวกัน (ดู claimJobsAsTrip ใน Requests.gs) -
+        // โชว์ badge ไว้ให้รู้ เพราะแก้ไขวันที่ย้ายเสร็จของคันนี้จะไปแก้ของคันอื่นในเที่ยวเดียวกันด้วยอัตโนมัติ
+        var tripBadge = r['รหัสเที่ยวรถ'] ? ' <span class="badge">🚚 เที่ยวรถ: ' + r['รหัสเที่ยวรถ'] + '</span>' : '';
         return '<div class="card">' +
-          '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
+          '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' + tripBadge +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -2000,7 +2013,16 @@
       ? callServer('markMovedSelfPropelled', CURRENT_USER.userId, id, newDateTime)
       : callServer('editMovedDateTime', CURRENT_USER.userId, id, newDateTime);
     call
-      .then(function () { showToast(action === 'markMovedSelfPropelled' ? 'บันทึกย้ายเสร็จแล้ว' : 'แก้ไขแล้ว'); closeEditDateTimeModal(); if (reloadFn) reloadFn(); })
+      .then(function (result) {
+        // editMovedDateTime แก้ให้ทุกคันในเที่ยวรถเดียวกันพร้อมกัน (ดู tripSiblings_ ใน Requests.gs) -
+        // ถ้ามีมากกว่า 1 คัน แจ้งให้คนขับ/เสมียน1 รู้ด้วยว่าแก้ไปกี่คัน กันงงว่าทำไมคันอื่นเปลี่ยนวันที่ด้วย
+        var tripCount = result && result.tripCount;
+        var msg = action === 'markMovedSelfPropelled' ? 'บันทึกย้ายเสร็จแล้ว' :
+          (tripCount > 1 ? 'แก้ไขแล้ว (' + tripCount + ' คัน - เที่ยวรถเดียวกัน)' : 'แก้ไขแล้ว');
+        showToast(msg);
+        closeEditDateTimeModal();
+        if (reloadFn) reloadFn();
+      })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
@@ -2153,10 +2175,13 @@
     el.innerHTML = rows.map(function (r) {
       var isClosed = r['สถานะการย้าย (แกน A)'] === 'ปิดงาน';
       var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
+      // มีรหัสเที่ยวรถ = คันนี้ขนไปพร้อมกับคันอื่นในรถคันเดียวกัน แก้ไขวันที่ย้ายเสร็จจะไปแก้ทุกคันในเที่ยว
+      // เดียวกันด้วยอัตโนมัติ (ดู editMovedDateTime ใน Requests.gs)
+      var tripBadge = r['รหัสเที่ยวรถ'] ? ' <span class="badge">🚚 เที่ยวรถ: ' + r['รหัสเที่ยวรถ'] + '</span>' : '';
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
-        (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') +
+        (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + tripBadge +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
