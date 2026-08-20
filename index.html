@@ -1813,7 +1813,7 @@
           '<div id="drv-form-' + id + '"></div>' +
           '</div>';
       }).join('');
-    });
+    }).catch(function (err) { showToast('โหลดงานของฉันไม่สำเร็จ: ' + err); });
   }
 
   /** วาดการ์ดคิวเปิดจาก rows ที่มีอยู่แล้ว (ไม่ยิง request ใหม่) - แยกออกมาจาก drvLoadOpenQueue เพื่อให้
@@ -1878,7 +1878,14 @@
     btn.disabled = true;
     callServer('claimJobsAsTrip', CURRENT_USER.userId, ids)
       .then(function () { showToast('รับงานเป็นเที่ยวเดียวกันแล้ว (' + ids.length + ' รายการ)'); drvLoadAll(); })
-      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
+      .catch(function (err) {
+        showToast('ผิดพลาด: ' + err);
+        btn.disabled = false;
+        // บั๊กที่คนขับแจ้ง 20 ส.ค. 2569: ถ้ารับงานเป็นเที่ยวไม่สำเร็จ (เช่น มีคนอื่นรับบางคันไปก่อนแล้ว) ปุ่ม
+        // "รับงานนี้" ของทุกการ์ดที่ถูกปิดใช้งานไว้ตอนเข้าโหมดเที่ยวรถ (ดู drvUpdateSelectedCount_) เดิมไม่ถูก
+        // ปลดล็อกกลับคืนเลย ต้องปิดแอปแล้วเปิดใหม่ถึงจะกดต่อได้ - แก้โดยปลดล็อกคืนตรงนี้ด้วย
+        Array.prototype.forEach.call(document.querySelectorAll('.drv-queueClaimBtn'), function (b) { b.disabled = false; });
+      });
   }
 
   function drvLoadOpenQueue() {
@@ -1886,6 +1893,14 @@
       drvOpenQueueCache_ = rows;
       drvRenderOpenQueue_(rows);
       drvUpdateQueueBadge_(rows.length);
+    }).catch(function (err) {
+      // เดิมไม่มี .catch ตรงนี้ - ถ้าโหลดคิวซ้ำหลังกดรับงาน (drvLoadAll) พลาด (เช่น หลุดกลางทางชั่วคราว)
+      // การ์ด/ปุ่มเก่าที่ถูกปิดใช้งานไว้ตอนกดรับงาน (โหมดเที่ยวรถ) จะค้างเป็น disabled ตลอดไปโดยไม่มีทางรู้ว่า
+      // เกิดอะไรขึ้น ต้องปิดแอปแล้วเปิดใหม่ (บั๊กที่คนขับแจ้ง 20 ส.ค. 2569) แก้โดยแจ้งเตือน + เคลียร์ checkbox/
+      // ปลดล็อกปุ่มคืนให้กดใช้งานต่อได้ทันที แม้โหลดซ้ำจะยังไม่สำเร็จก็ตาม (กดปุ่มรีเฟรชแท็บได้เองต่อ)
+      showToast('โหลดคิวงานไม่สำเร็จ: ' + err);
+      Array.prototype.forEach.call(document.querySelectorAll('.drv-queueCheck'), function (c) { c.checked = false; });
+      drvUpdateSelectedCount_();
     });
   }
 
@@ -2193,6 +2208,7 @@
           '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
           (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + batchBadge +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
+          '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
@@ -2315,6 +2331,7 @@
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
         (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + tripBadge + batchBadge +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
