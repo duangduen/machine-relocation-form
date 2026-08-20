@@ -256,6 +256,12 @@
       <datalist id="req-originList"></datalist>
       <div style="font-size:11px;color:#e65100;margin:-6px 0 10px;">ถ้าไม่ตรงกับความจริง แก้ไขในช่องนี้ได้เลย</div>
 
+      <!-- ขอย้ายเป็นชุดหลายคันพร้อมกัน (20 ส.ค. 2569 ตามที่ช่างขอไว้) - กดปุ่มนี้เพื่อเพิ่มเครื่องจักรที่
+           เลือก/กรอกต้นทางไว้ด้านบน เข้าไปในชุด แล้วพิมพ์คันถัดไปต่อได้เลย ปลายทาง/วันที่/ความเร่งด่วน/
+           หมายเหตุด้านล่างใช้ร่วมกันทั้งชุด ไม่ต้องกรอกซ้ำ ไม่ใช้ได้ตอนกำลังแก้ไขคำขอเดิม (reqEditingId) -->
+      <button type="button" class="secondary" id="req-addBatchBtn" onclick="reqAddMachineToBatch()">➕ เพิ่มเครื่องจักรอีกคัน (ขอย้ายพร้อมกันหลายคัน)</button>
+      <div id="req-batchList"></div>
+
       <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
       <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย">
       <datalist id="req-siteList"></datalist>
@@ -665,6 +671,7 @@
     // ขีดจำกัดความยาว URL จึงส่งผ่าน query string ได้สบาย ยกเว้น markMoved ที่มีรูปแนบ (base64)
     // อาจยาวเกิน ยังคงใช้ formPostRequest (ดูด้านล่าง) ต่อไป
     submitRequest: 'submitRequest',
+    submitRequestBatch: 'submitRequestBatch',
     cancelRequest: 'cancelRequest',
     editMyRequest: 'editMyRequest',
     approveRequest: 'approveRequest',
@@ -714,6 +721,7 @@
     listPjHistory: ['userId'],
     listClosedJobs: ['userId'],
     submitRequest: ['userId', 'payload'],
+    submitRequestBatch: ['userId', 'payload'],
     cancelRequest: ['userId', 'requestId'],
     editMyRequest: ['userId', 'requestId', 'patch'],
     approveRequest: ['userId', 'requestId'],
@@ -1050,6 +1058,9 @@
   var reqIsUrgent = false;
   var reqEditingId = null; // null = โหมดส่งคำขอใหม่ / มีค่า = กำลังแก้ไขคำขอนี้อยู่
   var reqMyRequestsCache = {}; // Request ID -> row object เอาไว้ใช้ตอนกดแก้ไข (ไม่ต้องยิง API ซ้ำ)
+  // ขอย้ายเป็นชุดหลายคันพร้อมกัน (20 ส.ค. 2569) - รายการเครื่องจักรที่กด "เพิ่ม" ไว้แล้ว แต่ละตัว
+  // {machineCode, origin, selfPropelled, label} ส่งพร้อมกันครั้งเดียวผ่าน submitRequestBatch ตอนกดส่งคำขอ
+  var reqBatchMachines = [];
 
   /** Sheet เก็บวันที่บางคอลัมน์เป็นเซลล์วันที่จริง พอส่งกลับมาเป็น JSON เลยกลายเป็น ISO string
    *  (เช่น "2026-07-30T17:00:00.000Z") - แปลงให้อ่านง่ายเป็น dd/MM/yyyy ตอนแสดงผล
@@ -1351,12 +1362,15 @@
     document.getElementById('req-selfPropelled').checked = false;
     reqSelectedMachine = null;
     reqSetUrgency(false);
+    reqBatchMachines = [];
+    renderReqBatchList_();
   }
 
   function reqCancelEditMode() {
     reqEditingId = null;
     document.getElementById('req-editBanner').style.display = 'none';
     document.getElementById('req-submitBtn').textContent = 'ส่งคำขอ';
+    document.getElementById('req-addBatchBtn').style.display = 'inline-block';
     reqResetForm();
   }
 
@@ -1384,7 +1398,62 @@
     document.getElementById('req-editBannerId').textContent = '#' + id;
     document.getElementById('req-editBanner').style.display = 'flex';
     document.getElementById('req-submitBtn').textContent = 'บันทึกการแก้ไข';
+    // โหมดแก้ไขคำขอเดิม ไม่รองรับการรวมส่งหลายคัน (แก้ได้แค่คำขอเดียวที่เลือกอยู่) - ซ่อนปุ่มเพิ่มเข้าชุดไว้
+    // กันสับสน + เคลียร์ชุดที่อาจค้างจากตอนกำลังจะส่งใหม่ก่อนกดแก้ไข
+    document.getElementById('req-addBatchBtn').style.display = 'none';
+    reqBatchMachines = [];
+    renderReqBatchList_();
     reqShowTab('form');
+  }
+
+  /**
+   * เพิ่มเครื่องจักรที่กำลังเลือก/กรอกต้นทางไว้อยู่ ณ ตอนนี้ เข้าไปในชุดคำขอ (feature: ขอย้ายเป็นชุด -
+   * 20 ส.ค. 2569 ตามที่ช่างขอไว้) แล้วเคลียร์ช่องเครื่องจักร/ต้นทางให้พิมพ์คันถัดไปต่อได้เลย ฟิลด์ปลายทาง/
+   * วันที่/ความเร่งด่วน/หมายเหตุ ไม่แตะ เพราะใช้ร่วมกันทั้งชุด (ดู submitRequestBatch ใน Requests.gs)
+   */
+  function reqAddMachineToBatch() {
+    if (reqEditingId) return showToast('โหมดแก้ไขคำขอเดิม ไม่รองรับการส่งหลายคันพร้อมกัน');
+    var originTyped = document.getElementById('req-origin').value.trim();
+    if (!reqSelectedMachine) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ก่อนกดเพิ่ม');
+    if (!originTyped) return showToast('กรุณาระบุต้นทางของคันนี้ก่อนกดเพิ่ม');
+    if (reqBatchMachines.some(function (x) { return x.machineCode === reqSelectedMachine.code; })) {
+      return showToast('เครื่องจักรคันนี้อยู่ในชุดแล้ว');
+    }
+    if (reqSelectedMachine.isNew) {
+      var confirmMsg = 'ไม่พบเครื่องจักร "' + reqSelectedMachine.code + '" ในทะเบียน\n' +
+        'ต้องการเพิ่มเข้าชุดคำขอด้วยรหัส/ชื่อนี้เลยหรือไม่? (ระบบจะแจ้งเสมียน1 ให้เพิ่มเข้าระบบให้)';
+      if (!confirm(confirmMsg)) return;
+    }
+    reqBatchMachines.push({
+      machineCode: reqSelectedMachine.code,
+      origin: originTyped,
+      selfPropelled: document.getElementById('req-selfPropelled').checked,
+      label: reqSelectedMachine.isNew ? reqSelectedMachine.code : reqMachineLabel_(reqSelectedMachine)
+    });
+    renderReqBatchList_();
+    document.getElementById('req-machineInput').value = '';
+    document.getElementById('req-origin').value = '';
+    document.getElementById('req-machineWarning').style.display = 'none';
+    document.getElementById('req-selfPropelled').checked = false;
+    reqSelectedMachine = null;
+    showToast('เพิ่มเข้าชุดแล้ว (' + reqBatchMachines.length + ' คัน) - พิมพ์คันถัดไปได้เลย');
+  }
+
+  function renderReqBatchList_() {
+    var el = document.getElementById('req-batchList');
+    if (!reqBatchMachines.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div style="font-size:13px;font-weight:600;margin:8px 0 4px;">เครื่องจักรในชุดนี้ (' + reqBatchMachines.length + ' คัน) - ใช้ปลายทาง/วันที่/ความเร่งด่วนด้านล่างร่วมกัน</div>' +
+      reqBatchMachines.map(function (item, i) {
+        return '<div class="card" style="padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+          '<span>🚜 ' + item.label + ' <span style="color:#888;font-size:12px;">(จาก: ' + item.origin + ')</span></span>' +
+          '<button type="button" class="danger" style="padding:4px 10px;" onclick="reqRemoveBatchMachine(' + i + ')">ลบ</button>' +
+          '</div>';
+      }).join('');
+  }
+
+  function reqRemoveBatchMachine(i) {
+    reqBatchMachines.splice(i, 1);
+    renderReqBatchList_();
   }
 
   function reqCancelRequest(id, btn) {
@@ -1397,12 +1466,68 @@
 
   function reqSubmitForm() {
     var destinationTyped = document.getElementById('req-destination').value.trim();
-    var originTyped = document.getElementById('req-origin').value.trim();
     var wantedDateTyped = document.getElementById('req-wantedDate').value;
-    if (!reqSelectedMachine) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ (พิมพ์ค้นหาแล้วแตะเลือก)');
     if (!destinationTyped) return showToast('กรุณาระบุปลายทาง');
-    if (!originTyped) return showToast('กรุณาระบุต้นทาง');
     if (!wantedDateTyped) return showToast('กรุณาระบุวันที่ต้องการย้าย');
+
+    var matchedSite = reqSiteByLabel[destinationTyped];
+    var sharedPayload = {
+      destination: destinationTyped,
+      destinationName: matchedSite ? matchedSite.name : destinationTyped, // ชื่อล้วนไม่มีรหัสนำหน้า ใช้เช็คหน้างานซ้ำฝั่ง server
+      wantedDate: wantedDateTyped,
+      urgency: reqIsUrgent ? 'ด่วน' : 'ไม่ด่วน',
+      note: document.getElementById('req-note').value
+    };
+
+    var isEdit = !!reqEditingId;
+
+    // โหมดขอย้ายเป็นชุดหลายคัน (feature: 20 ส.ค. 2569) - มีเครื่องจักรอยู่ในชุดแล้ว (กด "เพิ่มเครื่องจักร
+    // อีกคัน" ไว้ก่อนหน้านี้) และไม่ได้อยู่ระหว่างแก้ไขคำขอเดิม (ปุ่มเพิ่มถูกซ่อนไว้แล้วตอนแก้ไข กันมาถึง
+    // จุดนี้ได้อยู่แล้ว แต่เช็คซ้ำไว้กันเหนียว)
+    if (!isEdit && reqBatchMachines.length > 0) {
+      // ถ้ายังมีเครื่องจักรค้างอยู่ในช่องกรอก (เลือก/กรอกต้นทางไว้แล้วแต่ลืมกด "เพิ่ม") รวมเข้าชุดให้อัตโนมัติ
+      // กันช่างพลาดคันสุดท้ายหลุดไปเพราะลืมกดปุ่มเพิ่ม
+      var lastOriginTyped = document.getElementById('req-origin').value.trim();
+      if (reqSelectedMachine && lastOriginTyped &&
+        !reqBatchMachines.some(function (x) { return x.machineCode === reqSelectedMachine.code; })) {
+        reqBatchMachines.push({
+          machineCode: reqSelectedMachine.code,
+          origin: lastOriginTyped,
+          selfPropelled: document.getElementById('req-selfPropelled').checked,
+          label: reqSelectedMachine.isNew ? reqSelectedMachine.code : reqMachineLabel_(reqSelectedMachine)
+        });
+      }
+      var machinesPayload = reqBatchMachines.map(function (item) {
+        return { machineCode: item.machineCode, origin: item.origin, selfPropelled: item.selfPropelled };
+      });
+      var batchPayload = {
+        machines: machinesPayload,
+        destination: sharedPayload.destination,
+        destinationName: sharedPayload.destinationName,
+        wantedDate: sharedPayload.wantedDate,
+        urgency: sharedPayload.urgency,
+        note: sharedPayload.note
+      };
+      document.getElementById('req-submitBtn').disabled = true;
+      callServer('submitRequestBatch', CURRENT_USER.userId, batchPayload)
+        .then(function (r) {
+          var successEl = document.getElementById('req-successMsg');
+          successEl.textContent = '✅ ส่งคำขอสำเร็จแล้ว (' + r.count + ' คัน)';
+          successEl.style.display = 'block';
+          clearTimeout(window.__reqSuccessTimer);
+          window.__reqSuccessTimer = setTimeout(function () { successEl.style.display = 'none'; }, 4000);
+          reqResetForm();
+          reqLoadMyList();
+        })
+        .catch(function (err) { showToast('ผิดพลาด: ' + err); })
+        .finally(function () { document.getElementById('req-submitBtn').disabled = false; });
+      return;
+    }
+
+    // โหมดเดิม: ส่ง/แก้ไขคำขอทีละคัน (ไม่มีอะไรอยู่ในชุด)
+    var originTyped = document.getElementById('req-origin').value.trim();
+    if (!reqSelectedMachine) return showToast('กรุณาเลือกเครื่องจักรจากลิสต์ (พิมพ์ค้นหาแล้วแตะเลือก)');
+    if (!originTyped) return showToast('กรุณาระบุต้นทาง');
 
     // เครื่องจักรที่พิมพ์เองเพราะไม่มีในทะเบียน - ยืนยันอีกครั้งก่อนส่ง กันพิมพ์ผิด/สะกดผิดโดยไม่ทันสังเกต
     // (ดู listener ของ req-machineInput ด้านบนที่ตั้ง isNew ไว้ตอนหาไม่เจอในลิสต์)
@@ -1412,20 +1537,17 @@
       if (!confirm(confirmMsg)) return;
     }
 
-    var matchedSite = reqSiteByLabel[destinationTyped];
-
     var payload = {
       machineCode: reqSelectedMachine.code,
       origin: originTyped,
-      destination: destinationTyped,
-      destinationName: matchedSite ? matchedSite.name : destinationTyped, // ชื่อล้วนไม่มีรหัสนำหน้า ใช้เช็คหน้างานซ้ำฝั่ง server
-      wantedDate: document.getElementById('req-wantedDate').value,
-      urgency: reqIsUrgent ? 'ด่วน' : 'ไม่ด่วน',
-      note: document.getElementById('req-note').value,
+      destination: sharedPayload.destination,
+      destinationName: sharedPayload.destinationName,
+      wantedDate: sharedPayload.wantedDate,
+      urgency: sharedPayload.urgency,
+      note: sharedPayload.note,
       selfPropelled: document.getElementById('req-selfPropelled').checked
     };
 
-    var isEdit = !!reqEditingId;
     document.getElementById('req-submitBtn').disabled = true;
     var call = isEdit
       ? callServer('editMyRequest', CURRENT_USER.userId, reqEditingId, payload)
@@ -1441,6 +1563,7 @@
         reqEditingId = null;
         document.getElementById('req-editBanner').style.display = 'none';
         document.getElementById('req-submitBtn').textContent = 'ส่งคำขอ';
+        document.getElementById('req-addBatchBtn').style.display = 'inline-block';
         reqResetForm();
         reqLoadMyList();
       })
@@ -1460,10 +1583,12 @@
         var isPending = r['สถานะการย้าย (แกน A)'] === 'รออนุมัติ';
         var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
         var canSelfReport = isSelfPropelled && r['สถานะการย้าย (แกน A)'] === 'อนุมัติแล้ว รอคนขับรับงาน';
+        // มีรหัสชุดคำขอ = ส่งพร้อมกับคันอื่นในคราวเดียว (feature: ขอย้ายเป็นชุด - 20 ส.ค. 2569)
+        var batchBadge = r['รหัสชุดคำขอ'] ? ' <span class="badge">📦 ชุดคำขอ: ' + r['รหัสชุดคำขอ'] + '</span>' : '';
         return '<div class="card' + urgentClass + '">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
           (r['ความเร่งด่วน'] === 'ด่วน' ? ' <span class="badge urgent">ด่วน</span>' : '') +
-          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') +
+          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + batchBadge +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -1504,8 +1629,9 @@
     el.innerHTML = rows.map(function (r) {
       var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
       var id = r['Request ID'];
+      var batchBadge = r['รหัสชุดคำขอ'] ? ' <span class="badge">📦 ชุดคำขอ: ' + r['รหัสชุดคำขอ'] + '</span>' : '';
       return '<div class="card' + urgentClass + '">' +
-        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') +
+        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') + batchBadge +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -2061,10 +2187,11 @@
       el.innerHTML = rows.map(function (r) {
         var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
         var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
+        var batchBadge = r['รหัสชุดคำขอ'] ? ' <span class="badge">📦 ชุดคำขอ: ' + r['รหัสชุดคำขอ'] + '</span>' : '';
         return '<div class="card' + urgentClass + '">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
           '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
-          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') +
+          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + batchBadge +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -2182,10 +2309,11 @@
       // มีรหัสเที่ยวรถ = คันนี้ขนไปพร้อมกับคันอื่นในรถคันเดียวกัน แก้ไขวันที่ย้ายเสร็จจะไปแก้ทุกคันในเที่ยว
       // เดียวกันด้วยอัตโนมัติ (ดู editMovedDateTime ใน Requests.gs)
       var tripBadge = r['รหัสเที่ยวรถ'] ? ' <span class="badge">🚚 เที่ยวรถ: ' + r['รหัสเที่ยวรถ'] + '</span>' : '';
+      var batchBadge = r['รหัสชุดคำขอ'] ? ' <span class="badge">📦 ชุดคำขอ: ' + r['รหัสชุดคำขอ'] + '</span>' : '';
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
-        (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + tripBadge +
+        (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง</span>' : '') + tripBadge + batchBadge +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
