@@ -206,6 +206,7 @@
     <button type="button" onclick="lookupSearch()">ค้นหา</button>
   </div>
   <div id="lku-result"></div>
+  <div id="lku-history"></div>
 </div>
 
 <!-- ============ รายงานเครื่องจักรตามหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ============ -->
@@ -648,6 +649,7 @@
     listPendingAudit: 'pendingAudit',
     // ---- ตรวจสอบเครื่องจักร + รายงานหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ----
     getMachineStatus: 'machineStatus',
+    getMachineMoveHistory: 'machineMoveHistory',
     getSiteMachineReport: 'siteMachineReport',
     // ---- เสมียน4 (ซ่อมบำรุงเครื่องจักร) ----
     listMachinesForMaintenance: 'maintenanceList',
@@ -702,6 +704,7 @@
     listPjBacklog: ['userId'],
     listPendingAudit: ['userId'],
     getMachineStatus: ['machineCode'],
+    getMachineMoveHistory: ['machineCode'],
     getSiteMachineReport: ['asOf'],
     listMachinesForMaintenance: ['userId'],
     listMaintenanceHistory: ['userId'],
@@ -2381,6 +2384,7 @@
     var code = m ? m.code : val;
     if (!code) return showToast('กรุณาพิมพ์รหัสเครื่องจักร');
     document.getElementById('lku-result').innerHTML = '<div class="loading">กำลังค้นหา...</div>';
+    document.getElementById('lku-history').innerHTML = '';
     callServer('getMachineStatus', code).then(function (r) {
       var status = r.maintStatus || 'พร้อมใช้';
       var isReady = !isMachineNotReady_(status);
@@ -2398,8 +2402,36 @@
         ) : '') +
         (r.repairNote ? '<div class="row"><span class="label">หมายเหตุ</span><span>' + r.repairNote + '</span></div>' : '') +
         '</div>';
+      // ประวัติการย้ายของคันนี้ (ย้อนหลัง 50 รายการล่าสุด เฉพาะที่ย้ายเสร็จแล้ว/ปิดงาน) - ดู
+      // getMachineMoveHistory ใน Requests.gs - โหลดต่อจากสถานะปัจจุบัน ไม่บล็อกการแสดงการ์ดด้านบน
+      lookupLoadHistory_(r.code);
     }).catch(function (err) {
       document.getElementById('lku-result').innerHTML = '<div class="empty">ไม่พบเครื่องจักรนี้ (' + err + ')</div>';
+    });
+  }
+
+  /** โหลด+แสดงประวัติการย้ายของเครื่องจักรคันหนึ่ง ต่อท้ายผลค้นหาสถานะใน lookupSearch() (20 ส.ค. 2569 -
+   *  เสมียน 2 ขอไว้ ใช้ตรวจสอบว่ารถคันนี้เคยย้ายไปหน้างานไหนมาบ้าง) */
+  function lookupLoadHistory_(code) {
+    var el = document.getElementById('lku-history');
+    el.innerHTML = '<div class="loading">กำลังโหลดประวัติการย้าย...</div>';
+    callServer('getMachineMoveHistory', code).then(function (rows) {
+      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติการย้ายของคันนี้</div>'; return; }
+      el.innerHTML = '<h2 style="margin-top:16px;">ประวัติการย้าย (' + rows.length + ' รายการล่าสุด)</h2>' +
+        rows.map(function (r) {
+          var tripBadge = r['รหัสเที่ยวรถ'] ? ' <span class="badge">🚚 เที่ยวรถ: ' + r['รหัสเที่ยวรถ'] + '</span>' : '';
+          return '<div class="card">' +
+            '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
+            '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' + tripBadge +
+            '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
+            '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+            '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + (r['วันที่ขนย้ายจริง'] || '-') + '</span></div>' +
+            '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+            '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
+            '</div>';
+        }).join('');
+    }).catch(function (err) {
+      el.innerHTML = '<div class="empty">โหลดประวัติการย้ายไม่สำเร็จ: ' + err + '</div>';
     });
   }
 
