@@ -2374,9 +2374,9 @@
       return '<div class="card">' +
         '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
+        '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-        '<div class="row"><span class="label">วันที่ขอ</span><span>' + r['วันที่ขอ'] + '</span></div>' +
         (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
         '<input type="text" id="c2-pj-' + id + '" placeholder="กรอกเลข PJ">' +
         '<button onclick="c2Issue(\'' + id + '\', this)">บันทึกเลข PJ</button>' +
@@ -2420,6 +2420,7 @@
         return '<div class="card">' +
           '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
+          '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">ออกเลขโดย</span><span>' + (r['ผู้ออกเลข PJ + เวลา'] || '-') + '</span></div>' +
