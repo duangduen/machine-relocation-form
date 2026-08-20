@@ -2376,6 +2376,7 @@
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
+        (r['วันที่ขนย้ายจริง'] ? '<div class="row"><span class="label">วันที่-เวลาย้ายเสร็จ</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' : '') +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
         '<input type="text" id="c2-pj-' + id + '" placeholder="กรอกเลข PJ">' +
