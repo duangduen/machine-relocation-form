@@ -245,6 +245,9 @@
       <input id="req-machineInput" list="req-machineList" placeholder="พิมพ์ค้นหาทะเบียน/ชนิดรถ" autocomplete="off">
       <datalist id="req-machineList"></datalist>
       <div id="req-machineWarning" style="display:none;font-size:12px;font-weight:600;color:#c62828;background:#ffebee;border-radius:8px;padding:8px 10px;margin:-6px 0 10px;"></div>
+      <!-- เตือนกรณีเครื่องจักรนี้มีคำขอย้ายที่ยังไม่จบค้างอยู่แล้ว (20 ส.ค. 2569) - แยกกล่องต่างหากจาก
+           req-machineWarning ด้านบน เพราะอาจโชว์พร้อมกันได้ (เช่นเครื่องพังอยู่ + มีคนขอย้ายไปแล้วด้วย) -->
+      <div id="req-machineActiveWarning" style="display:none;font-size:12px;font-weight:600;color:#e65100;background:#fff3e0;border-radius:8px;padding:8px 10px;margin:-6px 0 10px;"></div>
 
       <label style="display:flex;align-items:center;gap:8px;margin-top:4px;">
         <input type="checkbox" id="req-selfPropelled" style="width:auto;">
@@ -656,6 +659,7 @@
     // ---- ตรวจสอบเครื่องจักร + รายงานหน้างาน (ทุกบทบาทเห็นเหมือนกัน) ----
     getMachineStatus: 'machineStatus',
     getMachineMoveHistory: 'machineMoveHistory',
+    getActiveRequestForMachine: 'activeRequestForMachine',
     getSiteMachineReport: 'siteMachineReport',
     // ---- เสมียน4 (ซ่อมบำรุงเครื่องจักร) ----
     listMachinesForMaintenance: 'maintenanceList',
@@ -712,6 +716,7 @@
     listPendingAudit: ['userId'],
     getMachineStatus: ['machineCode'],
     getMachineMoveHistory: ['machineCode'],
+    getActiveRequestForMachine: ['machineCode'],
     getSiteMachineReport: ['asOf'],
     listMachinesForMaintenance: ['userId'],
     listMaintenanceHistory: ['userId'],
@@ -1078,6 +1083,10 @@
   var reqSites = [];
   var reqSiteByLabel = {}; // composite label (รหัส - ชื่อ) -> site object
   var reqSelectedMachine = null;
+  // เก็บผลเช็ค "คำขอที่ยังไม่จบ" ของเครื่องจักรที่กำลังเลือกอยู่ตอนนี้ (null = ไม่มี/ยังไม่ได้เช็ค) - ตั้งค่า
+  // จาก listener ของ req-machineInput ด้านล่าง แล้วใช้ค่านี้ซ้ำตอนกด "เพิ่มเข้าชุด"/"ส่งคำขอ" กันยิง API
+  // ซ้ำซ้อน (20 ส.ค. 2569 - ดูคอมเมนต์ประกอบที่ reqAddMachineToBatch/reqSubmitForm)
+  var reqActiveDuplicateInfo = null;
   var reqIsUrgent = false;
   var reqEditingId = null; // null = โหมดส่งคำขอใหม่ / มีค่า = กำลังแก้ไขคำขอนี้อยู่
   var reqMyRequestsCache = {}; // Request ID -> row object เอาไว้ใช้ตอนกดแก้ไข (ไม่ต้องยิง API ซ้ำ)
@@ -1323,6 +1332,9 @@
             } else {
               warnEl.style.display = 'none';
             }
+            // เช็คว่าเครื่องนี้มีคำขอที่ยังไม่จบค้างอยู่ไหม (20 ส.ค. 2569 - กันช่างคนที่ 2 ส่งคำขอซ้ำโดยไม่รู้ว่า
+            // มีคนขอย้ายเครื่องนี้ไปแล้ว) ดู reqCheckActiveDuplicate_ ด้านล่าง
+            reqCheckActiveDuplicate_(m.code);
           } else if (typed) {
             // ไม่พบเครื่องจักรนี้ในทะเบียน (13 ส.ค. 2569 ตกลงว่าไม่บล็อกช่าง) - ให้พิมพ์รหัส/ชื่อรุ่นเองแทน
             // แล้วส่งคำขอด้วยข้อความที่พิมพ์ตรงๆ ระบบจะแจ้งเสมียน1 ให้ไปเพิ่มเข้าทะเบียนย้อนหลัง (ดู
@@ -1331,13 +1343,46 @@
             document.getElementById('req-origin').value = '';
             warnEl.textContent = '⚠️ ไม่พบเครื่องจักรนี้ในทะเบียน จะส่งคำขอด้วยรหัส/ชื่อนี้ และแจ้งเสมียน1 ให้เพิ่มเข้าระบบ (กรุณาระบุต้นทางเองด้วย)';
             warnEl.style.display = 'block';
+            reqActiveDuplicateInfo = null;
+            document.getElementById('req-machineActiveWarning').style.display = 'none';
           } else {
             reqSelectedMachine = null;
+            reqActiveDuplicateInfo = null;
+            document.getElementById('req-machineActiveWarning').style.display = 'none';
             document.getElementById('req-origin').value = '';
             warnEl.style.display = 'none';
           }
         });
       }
+    });
+  }
+
+  /**
+   * เช็คว่าเครื่องจักรนี้มีคำขอย้ายที่ "ยังไม่จบ" ค้างอยู่ในระบบไหม (getActiveRequestForMachine ฝั่ง server)
+   * แล้วโชว์/ซ่อนกล่องเตือน req-machineActiveWarning ตามผล เรียกจาก listener ของ req-machineInput ตอนเลือก
+   * เครื่องจักรที่มีในทะเบียน (20 ส.ค. 2569 - กันปัญหาช่างคนที่ 2 ส่งคำขอซ้ำเพราะไม่รู้ว่ามีคนขอไปแล้ว)
+   * ข้าม (ไม่เตือน) ถ้าคำขอที่เจอคือคำขอเดิมที่กำลังแก้ไขอยู่เอง (reqEditingId) - ไม่งั้นจะเตือนตัวเองว่า "ซ้ำ"
+   * กับตัวเองอย่างไม่มีเหตุผล ผลลัพธ์เก็บไว้ที่ reqActiveDuplicateInfo ให้ reqAddMachineToBatch/reqSubmitForm
+   * เอาไปใช้ซ้ำตอนกดปุ่มต่อ กันยิง API ซ้ำซ้อนโดยไม่จำเป็น
+   */
+  function reqCheckActiveDuplicate_(machineCode) {
+    var warnEl = document.getElementById('req-machineActiveWarning');
+    callServer('getActiveRequestForMachine', machineCode).then(function (info) {
+      // กันกรณี response มาช้าแล้ว user เปลี่ยนไปเลือกเครื่องจักรอื่นระหว่างรอไปแล้ว - ไม่เอาผลลัพธ์เก่ามาทับ
+      if (!reqSelectedMachine || reqSelectedMachine.code !== machineCode) return;
+      if (info && info.requestId !== reqEditingId) {
+        reqActiveDuplicateInfo = info;
+        warnEl.textContent = '⚠️ เครื่องจักรนี้มีคำขอย้ายที่ยังไม่จบอยู่แล้ว (เลขที่ ' + info.requestId +
+          ', สถานะ: ' + info.status + ', ขอโดย: ' + (info.requesterName || '-') + ') กรุณาตรวจสอบก่อนส่งคำขอซ้ำ';
+        warnEl.style.display = 'block';
+      } else {
+        reqActiveDuplicateInfo = null;
+        warnEl.style.display = 'none';
+      }
+    }).catch(function () {
+      // เช็คไม่สำเร็จ (เช่นเน็ตหลุดชั่วคราว) - ไม่บล็อกช่าง แค่ไม่มีการเตือนให้เฉยๆ ไม่ใช่ error ที่ต้องโชว์
+      reqActiveDuplicateInfo = null;
+      warnEl.style.display = 'none';
     });
   }
 
@@ -1382,8 +1427,10 @@
     document.getElementById('req-wantedDate').value = '';
     document.getElementById('req-note').value = '';
     document.getElementById('req-machineWarning').style.display = 'none';
+    document.getElementById('req-machineActiveWarning').style.display = 'none';
     document.getElementById('req-selfPropelled').checked = false;
     reqSelectedMachine = null;
+    reqActiveDuplicateInfo = null;
     reqSetUrgency(false);
     reqBatchMachines = [];
     renderReqBatchList_();
@@ -1411,6 +1458,10 @@
       document.getElementById('req-machineWarning').textContent =
         '⚠️ เครื่องจักรนี้ยังไม่มีในทะเบียน (แจ้งเสมียน1 แล้ว) แก้ไขต้นทาง/รหัสได้ถ้าจำเป็น';
     }
+    // ไม่เตือน "คำขอซ้ำ" ตอนแก้ไขคำขอเดิม เพราะคำขอที่กำลังแก้อยู่นี้เองก็นับเป็น "คำขอที่ยังไม่จบ" ของ
+    // เครื่องจักรนี้อยู่แล้ว (ดู reqCheckActiveDuplicate_ ที่กันไว้เหมือนกันถ้าฟังก์ชันนี้ถูกเรียกซ้ำทีหลัง)
+    reqActiveDuplicateInfo = null;
+    document.getElementById('req-machineActiveWarning').style.display = 'none';
     document.getElementById('req-origin').value = r['ต้นทาง'] || '';
     document.getElementById('req-destination').value = r['ปลายทาง'] || '';
     document.getElementById('req-wantedDate').value = toDateInputValue_(r['วันที่ต้องการย้าย']);
@@ -1447,6 +1498,14 @@
         'ต้องการเพิ่มเข้าชุดคำขอด้วยรหัส/ชื่อนี้เลยหรือไม่? (ระบบจะแจ้งเสมียน1 ให้เพิ่มเข้าระบบให้)';
       if (!confirm(confirmMsg)) return;
     }
+    // เตือนซ้ำก่อนเพิ่มเข้าชุด ถ้าเครื่องคันนี้มีคำขอที่ยังไม่จบค้างอยู่แล้ว (reqActiveDuplicateInfo ตั้งค่า
+    // จาก reqCheckActiveDuplicate_ ตอนเลือกเครื่องจักรนี้ไว้ก่อนหน้านี้แล้ว - 20 ส.ค. 2569)
+    if (reqActiveDuplicateInfo) {
+      var dupMsg = 'เครื่องจักรนี้มีคำขอย้ายที่ยังไม่จบอยู่แล้ว (เลขที่ ' + reqActiveDuplicateInfo.requestId +
+        ', สถานะ: ' + reqActiveDuplicateInfo.status + ', ขอโดย: ' + (reqActiveDuplicateInfo.requesterName || '-') + ')\n' +
+        'ต้องการเพิ่มเข้าชุดคำขอซ้ำอีกใบหรือไม่?';
+      if (!confirm(dupMsg)) return;
+    }
     reqBatchMachines.push({
       machineCode: reqSelectedMachine.code,
       origin: originTyped,
@@ -1457,8 +1516,10 @@
     document.getElementById('req-machineInput').value = '';
     document.getElementById('req-origin').value = '';
     document.getElementById('req-machineWarning').style.display = 'none';
+    document.getElementById('req-machineActiveWarning').style.display = 'none';
     document.getElementById('req-selfPropelled').checked = false;
     reqSelectedMachine = null;
+    reqActiveDuplicateInfo = null;
     showToast('เพิ่มเข้าชุดแล้ว (' + reqBatchMachines.length + ' คัน) - พิมพ์คันถัดไปได้เลย');
   }
 
@@ -1503,6 +1564,16 @@
     };
 
     var isEdit = !!reqEditingId;
+
+    // เตือนซ้ำก่อนส่งคำขอ ถ้าเครื่องจักรที่กำลังจะส่งตอนนี้ (ในช่องกรอก - ไม่ว่าจะส่งเดี่ยวๆ หรือเป็นคันสุดท้าย
+    // ที่ยังไม่ได้กด "เพิ่มเข้าชุด") มีคำขอที่ยังไม่จบค้างอยู่แล้ว (20 ส.ค. 2569) - เครื่องที่อยู่ในชุดแล้ว
+    // (reqBatchMachines) ถูกเช็ค/ยืนยันไปแล้วตอนกด "เพิ่ม" ทีละคัน ไม่ต้องเช็คซ้ำตรงนี้อีก
+    if (!isEdit && reqActiveDuplicateInfo) {
+      var dupSubmitMsg = 'เครื่องจักรนี้มีคำขอย้ายที่ยังไม่จบอยู่แล้ว (เลขที่ ' + reqActiveDuplicateInfo.requestId +
+        ', สถานะ: ' + reqActiveDuplicateInfo.status + ', ขอโดย: ' + (reqActiveDuplicateInfo.requesterName || '-') + ')\n' +
+        'ยืนยันว่าต้องการส่งคำขอซ้ำอีกใบหรือไม่?';
+      if (!confirm(dupSubmitMsg)) return;
+    }
 
     // โหมดขอย้ายเป็นชุดหลายคัน (feature: 20 ส.ค. 2569) - มีเครื่องจักรอยู่ในชุดแล้ว (กด "เพิ่มเครื่องจักร
     // อีกคัน" ไว้ก่อนหน้านี้) และไม่ได้อยู่ระหว่างแก้ไขคำขอเดิม (ปุ่มเพิ่มถูกซ่อนไว้แล้วตอนแก้ไข กันมาถึง
