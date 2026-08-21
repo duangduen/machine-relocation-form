@@ -961,7 +961,15 @@
           targetBtn.classList.add('active');
         }
       } else {
-        showRoleSection(info.roles[0]);
+        // feature: พนักงานทั่วไป (20 ส.ค. 2569) - บทบาทนี้ไม่มี section เป็นของตัวเอง (ดู ROLE_SECTION)
+        // ถ้า user คนนี้ไม่มีบทบาทไหนเลยที่มี section จริงๆ (เช่นมีแค่ "พนักงานทั่วไป") ให้เปิดหน้า
+        // "ตรวจสอบเครื่องจักร" เป็นค่าเริ่มต้นแทน ไม่งั้นจะเจอหน้าว่างเปล่าตั้งแต่ล็อกอินครั้งแรก
+        var knownRoles = info.roles.filter(function (r) { return ROLE_SECTION[r]; });
+        if (knownRoles.length) {
+          showRoleSection(knownRoles[0]);
+        } else {
+          showSharedSection('section-lookup');
+        }
       }
     } catch (err) {
       hideLoadingOverlay();
@@ -984,11 +992,18 @@
   function showRoleSwitcher(roles) {
     var bar = document.getElementById('role-switcher');
     bar.style.display = 'flex';
-    var html = roles.map(function (r, i) {
+    // feature: พนักงานทั่วไป (20 ส.ค. 2569) - กรองเอาเฉพาะบทบาทที่มีแท็บ/section ของตัวเองจริงๆ (มีอยู่ใน
+    // ROLE_SECTION) มาสร้างปุ่ม ถ้าคนนี้มีแค่บทบาท "พนักงานทั่วไป" (ไม่มี section เป็นของตัวเองเลย ดูคอมเมนต์
+    // ที่ CONFIG.ROLES ใน Config.gs) จะไม่มีปุ่มบทบาทขึ้นมาให้กดเลย เหลือแค่ 2 ปุ่มที่ใช้ร่วมกันด้านล่างเท่านั้น
+    var knownRoles = roles.filter(function (r) { return ROLE_SECTION[r]; });
+    var html = knownRoles.map(function (r, i) {
       return '<button type="button" class="' + (i === 0 ? 'active' : '') + '" data-kind="role" data-role="' + r + '" onclick="switchTab_(this)">' +
         (ROLE_LABEL[r] || r) + '</button>';
     }).join('');
-    html += '<button type="button" data-kind="shared" data-section="section-lookup" onclick="switchTab_(this)">🔍 ตรวจสอบเครื่องจักร</button>';
+    // ถ้าไม่มีบทบาทที่มี section เป็นของตัวเองเลย ให้ไฮไลต์ปุ่ม "ตรวจสอบเครื่องจักร" เป็นค่าเริ่มต้นแทน
+    // (ปกติปุ่มแรกในบรรดาบทบาทจะถูกไฮไลต์ ข้อ i===0 ด้านบน แต่กรณีนี้ไม่มีปุ่มบทบาทให้ไฮไลต์เลย)
+    var lookupActiveClass = knownRoles.length === 0 ? ' active' : '';
+    html += '<button type="button" class="' + lookupActiveClass.trim() + '" data-kind="shared" data-section="section-lookup" onclick="switchTab_(this)">🔍 ตรวจสอบเครื่องจักร</button>';
     html += '<button type="button" data-kind="shared" data-section="section-report" onclick="switchTab_(this)">📊 รายงานหน้างาน</button>';
     bar.innerHTML = html;
   }
@@ -1040,7 +1055,15 @@
   /** ปุ่ม "กลับเมนูหลัก" ในหน้าที่ใช้ร่วมกันทุกบทบาท - กลับไปโชว์บทบาทแรกของ user คนนี้เหมือนตอนเพิ่ง login */
   function backToRoleHome() {
     if (CURRENT_ROLES && CURRENT_ROLES.length) {
-      showRoleSection(CURRENT_ROLES[0]);
+      // feature: พนักงานทั่วไป (20 ส.ค. 2569) - ถ้าไม่มีบทบาทไหนมี section ของตัวเองเลย (ดู ROLE_SECTION)
+      // ให้ "กลับเมนูหลัก" ไปที่หน้า "ตรวจสอบเครื่องจักร" แทน (เดิม showRoleSection คืนค่าทันทีเงียบๆ ถ้าไม่มี
+      // section ตรงกับบทบาท ทำให้ปุ่มนี้ดูเหมือนไม่ทำอะไรเลยสำหรับบทบาทนี้)
+      var knownRoles = CURRENT_ROLES.filter(function (r) { return ROLE_SECTION[r]; });
+      if (knownRoles.length) {
+        showRoleSection(knownRoles[0]);
+      } else {
+        showSharedSection('section-lookup');
+      }
       var firstBtn = document.querySelector('#role-switcher button');
       if (firstBtn) {
         Array.prototype.forEach.call(document.querySelectorAll('#role-switcher button'), function (b) { b.classList.remove('active'); });
