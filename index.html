@@ -2810,10 +2810,11 @@
               '<span class="badge" style="background:#eef1f5;color:#555;">' + m.daysAtSite + ' วัน</span>' : '';
             // m.activeRequest มีเฉพาะรายงาน "ปัจจุบัน" เท่านั้น (undefined ในรายงานย้อนหลัง asOf - ดู
             // getSiteMachineReport ใน MasterData.gs) activeRequestBadgeHtml_ คืนค่าว่างเปล่าถ้าไม่มีอยู่แล้ว
+            var activeBadge = activeRequestBadgeHtml_(m.activeRequest);
             return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
-              '<span>' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span> ' +
-              activeRequestBadgeHtml_(m.activeRequest) + '</span>' +
-              '</div>';
+              '<span>' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span></span>' +
+              '</div>' +
+              (activeBadge ? '<div style="margin:-4px 0 8px;text-align:right;">' + activeBadge + '</div>' : '');
           }).join('') +
           '</div>';
       }).join('');
