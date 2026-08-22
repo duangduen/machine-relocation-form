@@ -1183,6 +1183,21 @@
     return status === 'พัง' || status === 'กำลังซ่อม' || status === 'รอซ่อม' || status === 'รอขาย' || status === 'ขาย';
   }
 
+  /**
+   * badge บอกว่าเครื่องจักรนี้ "มีคำขอย้ายค้างอยู่" หรือ "กำลังขนย้าย" อยู่ตอนนี้ (20 ส.ค. 2569 - ตามที่ขอไว้
+   * ให้เห็นสถานะขอย้าย/ขนย้ายในหน้าตรวจสอบเครื่องจักร + รายงานหน้างาน) info คือ object จาก
+   * getActiveRequestForMachine ใน Requests.gs (null ถ้าไม่มีคำขอค้างอยู่ - คืนค่าว่างเปล่า ไม่โชว์อะไรเลย)
+   * แยกสี/ข้อความ 2 แบบตามความหมาย: "มีคนขับรับงานแล้ว" = กำลังเดินทางจริงๆ (สีฟ้า) ส่วนสถานะอื่นที่เหลือ
+   * (รออนุมัติ/อนุมัติแล้วรอคนขับ) = ยังไม่ได้ออกเดินทาง แค่มีคำขอค้างอยู่ (สีส้ม)
+   */
+  function activeRequestBadgeHtml_(info) {
+    if (!info) return '';
+    var inTransit = info.status === 'มีคนขับรับงานแล้ว';
+    var label = (inTransit ? '🚚 กำลังขนย้าย' : '📋 มีคำขอย้ายค้างอยู่') + ' (#' + info.requestId + ')';
+    var style = inTransit ? 'background:#e3f2fd;color:#1565c0;' : 'background:#fff3e0;color:#e65100;';
+    return '<span class="badge" style="' + style + '">' + label + '</span>';
+  }
+
   function reqMachineLabel_(m) {
     return m.code + ' (' + m.subtype + ' - ' + m.currentSite + ')';
   }
@@ -2695,13 +2710,22 @@
     if (!code) return showToast('กรุณาพิมพ์รหัสเครื่องจักร');
     document.getElementById('lku-result').innerHTML = '<div class="loading">กำลังค้นหา...</div>';
     document.getElementById('lku-history').innerHTML = '';
-    callServer('getMachineStatus', code).then(function (r) {
+    // เช็คสถานะปัจจุบัน (getMachineStatus) คู่กับคำขอที่ยังไม่จบ (getActiveRequestForMachine) พร้อมกัน
+    // (20 ส.ค. 2569 - feature badge บอกสถานะขอย้าย/กำลังขนย้าย) ถ้าเช็คคำขอค้างไม่สำเร็จ (เช่นเน็ตหลุด)
+    // ไม่ทำให้การค้นหาทั้งหมดพัง แค่ไม่มี badge นี้โชว์เฉยๆ (.catch คืน null แทน)
+    Promise.all([
+      callServer('getMachineStatus', code),
+      callServer('getActiveRequestForMachine', code).catch(function () { return null; })
+    ]).then(function (results) {
+      var r = results[0];
+      var activeReq = results[1];
       var status = r.maintStatus || 'พร้อมใช้';
       var isReady = !isMachineNotReady_(status);
       document.getElementById('lku-result').innerHTML =
         '<div class="card">' +
         '<div class="machine-value">🚜 ' + r.code + (r.type ? ' (' + r.type + ')' : '') + '</div>' +
-        '<span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span>' +
+        '<span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span> ' +
+        activeRequestBadgeHtml_(activeReq) +
         '<div class="row"><span class="label">หน้างานปัจจุบัน</span><span>' + (r.currentSite || '-') + '</span></div>' +
         '<div class="row"><span class="label">ย้ายเข้าวันที่</span><span>' + (r.movedInDate || '-') + '</span></div>' +
         '<div class="row"><span class="label">อยู่มาแล้ว</span><span>' + (r.daysAtSite != null ? r.daysAtSite + ' วัน' : '-') + '</span></div>' +
@@ -2784,8 +2808,11 @@
             var status = m.maintStatus || 'พร้อมใช้';
             var daysBadge = (m.daysAtSite != null) ?
               '<span class="badge" style="background:#eef1f5;color:#555;">' + m.daysAtSite + ' วัน</span>' : '';
+            // m.activeRequest มีเฉพาะรายงาน "ปัจจุบัน" เท่านั้น (undefined ในรายงานย้อนหลัง asOf - ดู
+            // getSiteMachineReport ใน MasterData.gs) activeRequestBadgeHtml_ คืนค่าว่างเปล่าถ้าไม่มีอยู่แล้ว
             return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
-              '<span>' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span></span>' +
+              '<span>' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span> ' +
+              activeRequestBadgeHtml_(m.activeRequest) + '</span>' +
               '</div>';
           }).join('') +
           '</div>';
