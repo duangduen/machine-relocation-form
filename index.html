@@ -668,6 +668,7 @@
     listOpenQueue: 'openQueue',
     listMyClaimedJobs: 'myClaimedJobs',
     listAllRequests: 'allRequests',
+    cancelRequestByClerk1: 'cancelRequestByClerk1',
     listSitesPendingReview: 'sitesPendingReview',
     listSitesReviewed: 'sitesReviewed',
     listPjBacklog: 'pjBacklog',
@@ -727,6 +728,7 @@
     listOpenQueue: ['userId'],
     listMyClaimedJobs: ['userId'],
     listAllRequests: ['userId'],
+    cancelRequestByClerk1: ['userId', 'requestId', 'reason'],
     listSitesPendingReview: [],
     listSitesReviewed: [],
     listPjBacklog: ['userId'],
@@ -2372,10 +2374,12 @@
     callServer('listAllRequests', CURRENT_USER.userId).then(function (rows) {
       var el = document.getElementById('c1-list');
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีคำขอ</div>'; return; }
+      var cancellableStatuses = ['รออนุมัติ', 'อนุมัติแล้ว รอคนขับรับงาน', 'มีคนขับรับงานแล้ว'];
       el.innerHTML = rows.map(function (r) {
         var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
         var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
         var batchBadge = r['รหัสชุดคำขอ'] ? ' <span class="badge">📦 ชุดคำขอ: ' + r['รหัสชุดคำขอ'] + '</span>' : '';
+        var canCancel = cancellableStatuses.indexOf(r['สถานะการย้าย (แกน A)']) !== -1;
         return '<div class="card' + urgentClass + '">' +
           '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span> ' +
           '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + '</span>' +
@@ -2387,9 +2391,23 @@
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+          (canCancel ? '<button class="danger" style="margin-top:6px;" onclick="c1CancelPrompt(\'' + r['Request ID'] + '\', this)">ยกเลิกคำขอ</button>' : '') +
           '</div>';
       }).join('');
     });
+  }
+
+  /** เสมียน1 ยกเลิกคำขอที่อนุมัติไปแล้ว (เช่น เจอว่าเป็นคำขอซ้ำจากช่างคนละคน) - ดู cancelRequestByClerk1 ใน
+   *  Requests.gs ทำได้เฉพาะคำขอที่ยังไม่ย้ายเสร็จ/ปิดงาน (ปุ่มนี้เลยโชว์แค่บางสถานะเท่านั้น ดู c1LoadList ด้านบน) */
+  function c1CancelPrompt(id, btn) {
+    var reason = prompt('เหตุผลที่ยกเลิกคำขอ #' + id + ':');
+    if (reason === null) return;
+    if (!reason.trim()) { showToast('กรุณาระบุเหตุผล'); return; }
+    if (!confirm('ยืนยันยกเลิกคำขอ #' + id + '?')) return;
+    btn.disabled = true;
+    callServer('cancelRequestByClerk1', CURRENT_USER.userId, id, reason)
+      .then(function () { showToast('ยกเลิกคำขอแล้ว'); c1LoadList(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
 
   function c1ShowTab(tab) {
