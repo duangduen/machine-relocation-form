@@ -2811,8 +2811,9 @@
             // m.activeRequest มีเฉพาะรายงาน "ปัจจุบัน" เท่านั้น (undefined ในรายงานย้อนหลัง asOf - ดู
             // getSiteMachineReport ใน MasterData.gs) activeRequestBadgeHtml_ คืนค่าว่างเปล่าถ้าไม่มีอยู่แล้ว
             var activeBadge = activeRequestBadgeHtml_(m.activeRequest);
-            return '<div class="row"><span class="label">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
-              '<span>' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span></span>' +
+            return '<div class="row" style="align-items:flex-start;">' +
+              '<span class="label" style="flex:1 1 auto;min-width:0;padding-right:8px;">' + m.code + (m.type ? ' (' + m.type + ')' : '') + '</span>' +
+              '<span style="flex:0 0 auto;white-space:nowrap;">' + daysBadge + ' <span class="badge ' + maintStatusBadgeClass_(status) + '">' + status + '</span></span>' +
               '</div>' +
               (activeBadge ? '<div style="margin:-4px 0 8px;text-align:right;">' + activeBadge + '</div>' : '');
           }).join('') +
