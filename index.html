@@ -2391,7 +2391,7 @@
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
-          (canCancel ? '<button class="danger" style="margin-top:6px;" onclick="c1CancelPrompt(\'' + r['Request ID'] + '\', this)">ยกเลิกคำขอ</button>' : '') +
+          (canCancel ? '<button class="danger" style="display:inline-block;width:auto;padding:4px 10px;font-size:12px;margin-top:6px;" onclick="c1CancelPrompt(\'' + r['Request ID'] + '\', this)">ยกเลิกคำขอ</button>' : '') +
           '</div>';
       }).join('');
     });
@@ -2528,6 +2528,8 @@
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
         '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
         '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+        (r['สถานะการย้าย (แกน A)'] === 'ยกเลิกคำขอ' && r['Comment/หมายเหตุ'] ?
+          '<div class="row"><span class="label">เหตุผลยกเลิก</span><span>' + r['Comment/หมายเหตุ'] + '</span></div>' : '') +
         (r['วันที่ขนย้ายจริง'] ?
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
           '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
