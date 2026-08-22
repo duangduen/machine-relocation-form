@@ -2617,7 +2617,7 @@
         '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
         '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
         '<div class="row"><span class="label">ระยะทาง</span><span>' + (r['ระยะทาง (กม.)'] || r['ระยะทาง (กม.)'] === 0 ? r['ระยะทาง (กม.)'] + ' กม.' : '-') + '</span></div>' +
-        (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '<div class="row"><span class="label">รูปหลักฐาน</span><span>ไม่มีแนบ</span></div>') +
+        (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '') +
         '<button class="success" ' + (hasPj ? '' : 'disabled') + ' onclick="c3Close(\'' + id + '\', this)">' +
         (hasPj ? 'บันทึกค่าเที่ยว / ปิดงาน' : 'รอเลข PJ ก่อน') + '</button>' +
         '</div>';
