@@ -510,6 +510,22 @@
   </div>
 </div>
 
+<!-- ============ Modal แก้ไขเลขไมล์ต้นทาง-ปลายทาง (20 ส.ค. 2569 - feedback คนขับกรอกผิดตอน markMoved
+     แล้วไม่มีทางแก้ไขได้เลย) ใช้ pattern เดียวกับ editDateTimeModal ด้านบน ============ -->
+<div id="editMileageModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2000; align-items:center; justify-content:center; padding:16px;">
+  <div class="card" style="width:100%; max-width:320px; margin:0; border-left-color:var(--primary);">
+    <h2 style="margin-top:0;">แก้ไขเลขไมล์ (กรอกผิด)</h2>
+    <label>เลขไมล์ต้นทาง</label>
+    <input type="number" inputmode="numeric" id="editMileageModal-start">
+    <label>เลขไมล์ปลายทาง</label>
+    <input type="number" inputmode="numeric" id="editMileageModal-end">
+    <div class="card-actions">
+      <button class="secondary" onclick="closeEditMileageModal()">ยกเลิก</button>
+      <button class="success" onclick="submitEditMileageModal()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ============ ตั้งค่าที่ต้องแก้ก่อนใช้งานจริง ============
   const LIFF_ID = '2010592933-J3nNOO6d';
@@ -699,7 +715,8 @@
     listPauseHistory: 'pauseHistory',
     resolvePause: 'resolvePause',
     listRentalReport: 'rentalReport',
-    editMovedDateTime: 'editMovedDateTime'
+    editMovedDateTime: 'editMovedDateTime',
+    editMovedMileage: 'editMovedMileage'
   };
   var GET_ACTION_ARGS = {
     whoAmI: ['userId'],
@@ -749,7 +766,8 @@
     listPauseHistory: ['userId'],
     resolvePause: ['userId', 'pauseId', 'approve'],
     listRentalReport: ['userId'],
-    editMovedDateTime: ['userId', 'requestId', 'newDateTime']
+    editMovedDateTime: ['userId', 'requestId', 'newDateTime'],
+    editMovedMileage: ['userId', 'requestId', 'newStartMileage', 'newEndMileage']
   };
   // เหลือ markMoved อย่างเดียวที่ยังต้องใช้ hidden-iframe-form POST เพราะมีรูปแนบ (base64)
   // ที่อาจยาวเกินขีดจำกัดความยาว URL ของ JSONP/GET
@@ -2168,11 +2186,17 @@
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
-          // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้ายอีก กันยอดค่าเช่าที่ตรวจไปแล้วเปลี่ยน
-          // แบบไม่มีใครรู้ (ดู editMovedDateTime ใน Requests.gs ที่บล็อกไว้ฝั่งเซิร์ฟเวอร์ด้วยเหมือนกัน)
+          '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
+          // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้าย/เลขไมล์อีก กันยอดค่าเช่าที่ตรวจไปแล้ว
+          // เปลี่ยนแบบไม่มีใครรู้ (ดู editMovedDateTime/editMovedMileage ใน Requests.gs ที่บล็อกไว้ฝั่ง
+          // เซิร์ฟเวอร์ด้วยเหมือนกัน) - เพิ่มปุ่มแก้ไขเลขไมล์ (20 ส.ค. 2569 ตาม feedback คนขับที่กรอกผิดแล้ว
+          // ไม่มีทางแก้ได้เลย ใช้ pattern เดียวกับปุ่มแก้ไขวันที่/เวลาที่มีอยู่แล้ว)
           (isClosed ?
-            '<div style="font-size:12px;color:#888;">ปิดงานแล้ว แก้ไขวันที่ย้ายไม่ได้ (ติดต่อผู้ดูแลระบบถ้าจำเป็น)</div>' :
-            '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', drvLoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>') +
+            '<div style="font-size:12px;color:#888;">ปิดงานแล้ว แก้ไขวันที่ย้าย/เลขไมล์ไม่ได้ (ติดต่อผู้ดูแลระบบถ้าจำเป็น)</div>' :
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', drvLoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>' +
+            '<button class="secondary" onclick="editMovedMileagePrompt(\'' + r['Request ID'] + '\', drvLoadHistory, \'' + (r['เลขไมล์ต้นทาง'] || '') + '\', \'' + (r['เลขไมล์ปลายทาง'] || '') + '\')">แก้ไขเลขไมล์ (กรอกผิด)</button>' +
+            '</div>') +
           '</div>';
       }).join('');
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
@@ -2259,6 +2283,46 @@
           (tripCount > 1 ? 'แก้ไขแล้ว (' + tripCount + ' คัน - เที่ยวรถเดียวกัน)' : 'แก้ไขแล้ว');
         showToast(msg);
         closeEditDateTimeModal();
+        if (reloadFn) reloadFn();
+      })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  var editMileageModalState = null; // { id, reloadFn }
+
+  /**
+   * แก้ไขเลขไมล์ต้นทาง-ปลายทาง กรณีคนขับกรอกผิดตอนกด markMoved (20 ส.ค. 2569 - ตาม feedback ที่แจ้งว่า
+   * กรอกผิดแล้วไม่มีทางแก้ไขได้เลย) เปิดโมดัลให้กรอกเลขไมล์ใหม่ทั้งต้นทาง-ปลายทาง (ดู editMovedMileage
+   * ใน Requests.gs) currentStart/currentEnd: ค่าดั้งเดิม ใช้เติมค่าเริ่มต้นในโมดัลให้ตรงกับของเดิม
+   */
+  function editMovedMileagePrompt(id, reloadFn, currentStart, currentEnd) {
+    editMileageModalState = { id: id, reloadFn: reloadFn };
+    document.getElementById('editMileageModal-start').value = currentStart || '';
+    document.getElementById('editMileageModal-end').value = currentEnd || '';
+    document.getElementById('editMileageModal').style.display = 'flex';
+  }
+
+  function closeEditMileageModal() {
+    document.getElementById('editMileageModal').style.display = 'none';
+    editMileageModalState = null;
+  }
+
+  function submitEditMileageModal() {
+    if (!editMileageModalState) return;
+    var startVal = document.getElementById('editMileageModal-start').value;
+    var endVal = document.getElementById('editMileageModal-end').value;
+    if (!startVal) return showToast('กรุณาระบุเลขไมล์ต้นทาง');
+    if (!endVal) return showToast('กรุณาระบุเลขไมล์ปลายทาง');
+    if (Number(endVal) < Number(startVal)) return showToast('เลขไมล์ปลายทางน้อยกว่าต้นทาง กรุณาตรวจสอบ');
+    var id = editMileageModalState.id;
+    var reloadFn = editMileageModalState.reloadFn;
+    callServer('editMovedMileage', CURRENT_USER.userId, id, startVal, endVal)
+      .then(function (result) {
+        // editMovedMileage แก้ให้ทุกคันในเที่ยวรถเดียวกันพร้อมกัน (ดู tripSiblings_ ใน Requests.gs) เหมือน
+        // editMovedDateTime - แจ้งจำนวนคันที่แก้ไปด้วยถ้ามากกว่า 1 คัน กันงงว่าทำไมคันอื่นเปลี่ยนเลขไมล์ด้วย
+        var tripCount = result && result.tripCount;
+        showToast(tripCount > 1 ? 'แก้ไขแล้ว (' + tripCount + ' คัน - เที่ยวรถเดียวกัน)' : 'แก้ไขแล้ว');
+        closeEditMileageModal();
         if (reloadFn) reloadFn();
       })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
@@ -2433,11 +2497,16 @@
         '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
         (r['วันที่ขนย้ายจริง'] ?
           '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + r['วันที่ขนย้ายจริง'] + '</span></div>' +
-          // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้ายอีก กันยอดค่าเช่าที่ตรวจไปแล้วเปลี่ยน
-          // แบบไม่มีใครรู้ (ดู editMovedDateTime ใน Requests.gs ที่บล็อกไว้ฝั่งเซิร์ฟเวอร์ด้วยเหมือนกัน)
+          '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
+          // ปิดงานแล้ว (บันทึกค่าเที่ยวเรียบร้อย) ห้ามแก้ไขวันที่ย้าย/เลขไมล์อีก กันยอดค่าเช่าที่ตรวจไปแล้ว
+          // เปลี่ยนแบบไม่มีใครรู้ (ดู editMovedDateTime/editMovedMileage ใน Requests.gs ที่บล็อกไว้ฝั่ง
+          // เซิร์ฟเวอร์ด้วยเหมือนกัน) - เพิ่มปุ่มแก้ไขเลขไมล์ (20 ส.ค. 2569 เหมือนที่เพิ่มในหน้าประวัติคนขับ)
           (isClosed ?
-            '<div style="font-size:12px;color:#888;">ปิดงานแล้ว แก้ไขวันที่ย้ายไม่ได้ (ติดต่อผู้ดูแลระบบถ้าจำเป็น)</div>' :
-            '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', c1LoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>')
+            '<div style="font-size:12px;color:#888;">ปิดงานแล้ว แก้ไขวันที่ย้าย/เลขไมล์ไม่ได้ (ติดต่อผู้ดูแลระบบถ้าจำเป็น)</div>' :
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="secondary" onclick="editMovedDateTimePrompt(\'' + r['Request ID'] + '\', c1LoadHistory, \'' + r['วันที่ขนย้ายจริง'] + '\')">แก้ไขวันที่/เวลา (กรอกผิด)</button>' +
+            '<button class="secondary" onclick="editMovedMileagePrompt(\'' + r['Request ID'] + '\', c1LoadHistory, \'' + (r['เลขไมล์ต้นทาง'] || '') + '\', \'' + (r['เลขไมล์ปลายทาง'] || '') + '\')">แก้ไขเลขไมล์ (กรอกผิด)</button>' +
+            '</div>')
           : '') +
         '</div>';
     }).join('');
