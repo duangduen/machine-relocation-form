@@ -1516,6 +1516,20 @@
   }
 
   /**
+   * ยืนยันอีกครั้งก่อนเพิ่ม/ส่งคำขอ ถ้าช่องขับเคลื่อนตัวเองถูกติ๊กไว้ (23 ส.ค. 2569 - เจอเคสช่างโดนติ๊กไปโดย
+   * ไม่รู้ตัว เพราะช่องนี้ติ๊กอัตโนมัติตามค่า default ของเครื่องจักรที่เลือก ทำให้คำขอไม่เข้าคิวคนขับ) คืนค่า
+   * true ถ้าไม่ได้ติ๊กเลย (ไม่ต้องถามอะไร) หรือติ๊กไว้แล้วกดยืนยัน, false ถ้าติ๊กไว้แล้วกดยกเลิก (ผู้เรียกต้อง
+   * return ทันทีถ้าได้ false)
+   */
+  function reqConfirmSelfPropelled_() {
+    if (!document.getElementById('req-selfPropelled').checked) return true;
+    return confirm('เครื่องจักรนี้ติ๊กว่า "ขับเคลื่อนตัวเองได้"\n' +
+      'ถ้าใช่ ระบบจะไม่ส่งงานนี้เข้าคิวคนขับ และช่างต้องกดแจ้ง "ย้ายเสร็จแล้ว" ด้วยตนเองหลังได้รับอนุมัติ\n\n' +
+      'ยืนยันว่าเครื่องจักรนี้ขับเคลื่อนตัวเองได้จริง ไม่ต้องใช้คนขับ/รถขนส่งใช่หรือไม่?\n' +
+      '(ถ้าไม่ใช่ กด "ยกเลิก" แล้วเอาเครื่องหมายถูกออกจากช่อง "ขับเคลื่อนตัวเองได้" ก่อน)');
+  }
+
+  /**
    * เพิ่มเครื่องจักรที่กำลังเลือก/กรอกต้นทางไว้อยู่ ณ ตอนนี้ เข้าไปในชุดคำขอ (feature: ขอย้ายเป็นชุด -
    * 20 ส.ค. 2569 ตามที่ช่างขอไว้) แล้วเคลียร์ช่องเครื่องจักร/ต้นทางให้พิมพ์คันถัดไปต่อได้เลย ฟิลด์ปลายทาง/
    * วันที่/ความเร่งด่วน/หมายเหตุ ไม่แตะ เพราะใช้ร่วมกันทั้งชุด (ดู submitRequestBatch ใน Requests.gs)
@@ -1541,6 +1555,7 @@
         'ต้องการเพิ่มเข้าชุดคำขอซ้ำอีกใบหรือไม่?';
       if (!confirm(dupMsg)) return;
     }
+    if (!reqConfirmSelfPropelled_()) return;
     reqBatchMachines.push({
       machineCode: reqSelectedMachine.code,
       origin: originTyped,
@@ -1619,6 +1634,7 @@
       var lastOriginTyped = document.getElementById('req-origin').value.trim();
       if (reqSelectedMachine && lastOriginTyped &&
         !reqBatchMachines.some(function (x) { return x.machineCode === reqSelectedMachine.code; })) {
+        if (!reqConfirmSelfPropelled_()) return;
         reqBatchMachines.push({
           machineCode: reqSelectedMachine.code,
           origin: lastOriginTyped,
@@ -1665,6 +1681,7 @@
         'ต้องการส่งคำขอด้วยรหัส/ชื่อนี้เลยหรือไม่? (ระบบจะแจ้งเสมียน1 ให้เพิ่มเข้าระบบให้)';
       if (!confirm(confirmMsg)) return;
     }
+    if (!reqConfirmSelfPropelled_()) return;
 
     var payload = {
       machineCode: reqSelectedMachine.code,
@@ -1759,8 +1776,12 @@
       var urgentClass = r['ความเร่งด่วน'] === 'ด่วน' ? ' urgent' : '';
       var id = r['Request ID'];
       var batchBadge = r['รหัสชุดคำขอ'] ? ' <span class="badge">📦 ชุดคำขอ: ' + r['รหัสชุดคำขอ'] + '</span>' : '';
+      // feature: เตือนผู้อนุมัติว่าเป็นเครื่องจักรขับเคลื่อนตัวเอง (23 ส.ค. 2569 - เจอเคสช่างโดนติ๊กช่องนี้
+      // ไปโดยไม่รู้ตัว) ให้ผู้อนุมัติเห็นก่อนกดอนุมัติว่าคำขอนี้จะไม่เข้าคิวคนขับ เผื่อดูแล้วรู้สึกว่าไม่น่าใช่
+      // จะได้ทักท้วงกับช่างก่อน แทนที่จะรู้ทีหลังตอนคนขับหาคำขอนี้ไม่เจอ
+      var selfPropelledBadge = r['ขับเคลื่อนตัวเอง'] === 'Y' ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง (ไม่เข้าคิวคนขับ)</span>' : '';
       return '<div class="card' + urgentClass + '">' +
-        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') + batchBadge +
+        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') + batchBadge + selfPropelledBadge +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
@@ -2680,8 +2701,13 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
       el.innerHTML = rows.map(function (r) {
         var photo = r['รูปหลักฐานการย้าย'];
+        var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
         return '<div class="card">' +
           '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
+          // feature: เครื่องจักรขับเคลื่อนตัวเองได้ (22 ส.ค. 2569) - งานพวกนี้ไม่เคยผ่านคิว "รอตรวจสอบ" ของ
+          // เสมียน 3 เลย (ปิดงานอัตโนมัติตอนเสมียน 2 ออกเลข PJ - ดู issuePjNumber ใน Requests.gs) ใส่ badge
+          // อธิบายไว้กันเสมียน 3 งงว่าทำไมไม่เคยเห็นตอนรอตรวจสอบ
+          (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง - ปิดงานอัตโนมัติ</span>' : '') +
           '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
