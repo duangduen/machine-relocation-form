@@ -368,6 +368,7 @@
   <div class="tab-nav">
     <button type="button" id="c1-tabBtn-active" class="active" onclick="c1ShowTab('active')">ภาพรวม</button>
     <button type="button" id="c1-tabBtn-fixlocation" onclick="c1ShowTab('fixlocation')">แก้ไขตำแหน่ง</button>
+    <button type="button" id="c1-tabBtn-addmachine" onclick="c1ShowTab('addmachine')">เพิ่มเครื่องจักร</button>
     <button type="button" id="c1-tabBtn-history" onclick="c1ShowTab('history')">ประวัติ</button>
   </div>
 
@@ -391,6 +392,27 @@
 
       <button onclick="c1fixSubmit()" id="c1fix-submitBtn">บันทึกตำแหน่งที่ถูกต้อง</button>
       <div id="c1fix-successMsg" class="success-msg"></div>
+    </div>
+  </div>
+  <div id="c1-tab-addmachine" style="display:none;">
+    <div class="card">
+      <p style="font-size:12px;color:#888;margin-top:0;">เพิ่มเครื่องจักรที่ยังไม่มีในทะเบียนเข้าระบบโดยตรง ไม่ต้องเข้าไปแก้ในชีตเอง</p>
+      <label>เบอร์รถ/ทะเบียน</label>
+      <input id="c1add-code" placeholder="เช่น X-64" autocomplete="off">
+
+      <label>ประเภทรถ</label>
+      <input id="c1add-type" placeholder="เช่น รถแบ็คโฮ" autocomplete="off">
+
+      <label>หน้างานปัจจุบัน</label>
+      <input id="c1add-site" list="c1fix-siteList" placeholder="พิมพ์ค้นหาหน้างาน" autocomplete="off">
+
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;">
+        <input type="checkbox" id="c1add-selfPropelled" style="width:auto;margin:0;">
+        ขับเคลื่อนตัวเองได้ (ไม่ต้องมีคนขับ/รถขนส่ง)
+      </label>
+
+      <button onclick="c1AddMachineSubmit()" id="c1add-submitBtn">เพิ่มเครื่องจักรเข้าทะเบียน</button>
+      <div id="c1add-successMsg" class="success-msg"></div>
     </div>
   </div>
   <div id="c1-tab-history" style="display:none;">
@@ -704,10 +726,12 @@
     markMovedSelfPropelled: 'markMovedSelfPropelled',
     editRequestFields: 'editRequestFields',
     issuePjNumber: 'issuePjNumber',
+    editPjNumber: 'editPjNumber',
     closeJob: 'closeJob',
     markSiteReviewed: 'markSiteReviewed',
     correctMachineLocation: 'correctMachineLocation',
     updateMachineMaintenance: 'updateMachineMaintenance',
+    addMachine: 'addMachine',
     // ---- หยุดใช้งานเครื่องจักร + รายงานค่าเช่า (feature: คำนวณค่าเช่าเครื่องจักร) ----
     requestPause: 'requestPause',
     listMyPauses: 'myPauses',
@@ -757,10 +781,12 @@
     markMovedSelfPropelled: ['userId', 'requestId', 'actualDate'],
     editRequestFields: ['userId', 'requestId', 'patch'],
     issuePjNumber: ['userId', 'requestId', 'pjNumber'],
+    editPjNumber: ['userId', 'requestId', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
     markSiteReviewed: ['userId', 'siteName', 'note'],
     correctMachineLocation: ['userId', 'machineCode', 'newSite'],
     updateMachineMaintenance: ['userId', 'machineCode', 'patch'],
+    addMachine: ['userId', 'payload'],
     requestPause: ['userId', 'payload'],
     listMyPauses: ['userId'],
     reportResume: ['userId', 'pauseId', 'resumeDate'],
@@ -2434,12 +2460,17 @@
   function c1ShowTab(tab) {
     document.getElementById('c1-tab-active').style.display = tab === 'active' ? 'block' : 'none';
     document.getElementById('c1-tab-fixlocation').style.display = tab === 'fixlocation' ? 'block' : 'none';
+    document.getElementById('c1-tab-addmachine').style.display = tab === 'addmachine' ? 'block' : 'none';
     document.getElementById('c1-tab-history').style.display = tab === 'history' ? 'block' : 'none';
     document.getElementById('c1-tabBtn-active').classList.toggle('active', tab === 'active');
     document.getElementById('c1-tabBtn-fixlocation').classList.toggle('active', tab === 'fixlocation');
+    document.getElementById('c1-tabBtn-addmachine').classList.toggle('active', tab === 'addmachine');
     document.getElementById('c1-tabBtn-history').classList.toggle('active', tab === 'history');
     if (tab === 'active') c1LoadList();
     else if (tab === 'fixlocation') { c1fixLoadMachines(); c1fixLoadSites(); }
+    // แท็บเพิ่มเครื่องจักรใช้ datalist หน้างานร่วมกับแท็บแก้ไขตำแหน่ง (id="c1fix-siteList") เลยเรียก
+    // c1fixLoadSites() ซ้ำได้เลย ไม่ต้องเขียนฟังก์ชันโหลดหน้างานซ้ำอีกชุด
+    else if (tab === 'addmachine') c1fixLoadSites();
     else c1LoadHistory();
   }
 
@@ -2506,6 +2537,33 @@
       })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); })
       .finally(function () { document.getElementById('c1fix-submitBtn').disabled = false; });
+  }
+
+  /** เพิ่มเครื่องจักรใหม่เข้าทะเบียน master (23 ส.ค. 2569) ดู addMachine ใน MasterData.gs */
+  function c1AddMachineSubmit() {
+    var code = document.getElementById('c1add-code').value.trim();
+    if (!code) return showToast('กรุณาระบุเบอร์รถ/ทะเบียน');
+    var payload = {
+      code: code,
+      type: document.getElementById('c1add-type').value.trim(),
+      currentSite: document.getElementById('c1add-site').value.trim(),
+      selfPropelled: document.getElementById('c1add-selfPropelled').checked
+    };
+    document.getElementById('c1add-submitBtn').disabled = true;
+    callServer('addMachine', CURRENT_USER.userId, payload)
+      .then(function () {
+        var successEl = document.getElementById('c1add-successMsg');
+        successEl.textContent = '✅ เพิ่มเครื่องจักร "' + code + '" เข้าทะเบียนแล้ว';
+        successEl.style.display = 'block';
+        clearTimeout(window.__c1addSuccessTimer);
+        window.__c1addSuccessTimer = setTimeout(function () { successEl.style.display = 'none'; }, 4000);
+        document.getElementById('c1add-code').value = '';
+        document.getElementById('c1add-type').value = '';
+        document.getElementById('c1add-site').value = '';
+        document.getElementById('c1add-selfPropelled').checked = false;
+      })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); })
+      .finally(function () { document.getElementById('c1add-submitBtn').disabled = false; });
   }
 
   function c1LoadHistory() {
@@ -2644,9 +2702,20 @@
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">ออกเลขโดย</span><span>' + (r['ผู้ออกเลข PJ + เวลา'] || '-') + '</span></div>' +
+          '<button class="secondary" onclick="c2EditPjPrompt(\'' + r['Request ID'] + '\', \'' + (r['เลข PJ'] || '').replace(/'/g, '') + '\')">แก้ไขเลข PJ (กรอกผิด)</button>' +
           '</div>';
       }).join('');
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
+  }
+
+  /** แก้ไขเลข PJ ที่ออกไปแล้ว (23 ส.ค. 2569 - เจอเคสกรอกผิดพลาด) ดู editPjNumber ใน Requests.gs */
+  function c2EditPjPrompt(id, currentPj) {
+    var val = prompt('แก้ไขเลข PJ ของคำขอ #' + id + ':', currentPj || '');
+    if (val === null) return;
+    if (!val.trim()) return showToast('กรุณาระบุเลข PJ');
+    callServer('editPjNumber', CURRENT_USER.userId, id, val.trim())
+      .then(function () { showToast('แก้ไขเลข PJ แล้ว'); c2LoadHistory(); })
+      .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
   /* ============================= เสมียน 3 ============================= */
