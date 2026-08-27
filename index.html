@@ -401,7 +401,8 @@
       <input id="c1add-code" placeholder="เช่น X-64" autocomplete="off">
 
       <label>ประเภทรถ</label>
-      <input id="c1add-type" placeholder="เช่น รถแบ็คโฮ" autocomplete="off">
+      <input id="c1add-type" list="c1add-typeList" placeholder="พิมพ์ค้นหาประเภทรถ" autocomplete="off">
+      <datalist id="c1add-typeList"></datalist>
 
       <label>หน้างานปัจจุบัน</label>
       <input id="c1add-site" list="c1fix-siteList" placeholder="พิมพ์ค้นหาหน้างาน" autocomplete="off">
@@ -685,6 +686,7 @@
     whoAmI: 'whoAmI',
     getMachineList: 'machineList',
     getSiteList: 'siteList',
+    getVehicleTypeList: 'vehicleTypeList',
     listMyRequests: 'myRequests',
     listPendingApprovals: 'pendingApprovals',
     listOpenQueue: 'openQueue',
@@ -747,6 +749,7 @@
     whoAmI: ['userId'],
     getMachineList: [],
     getSiteList: [],
+    getVehicleTypeList: [],
     listMyRequests: ['userId'],
     listPendingApprovals: ['userId'],
     listOpenQueue: ['userId'],
@@ -2469,8 +2472,8 @@
     if (tab === 'active') c1LoadList();
     else if (tab === 'fixlocation') { c1fixLoadMachines(); c1fixLoadSites(); }
     // แท็บเพิ่มเครื่องจักรใช้ datalist หน้างานร่วมกับแท็บแก้ไขตำแหน่ง (id="c1fix-siteList") เลยเรียก
-    // c1fixLoadSites() ซ้ำได้เลย ไม่ต้องเขียนฟังก์ชันโหลดหน้างานซ้ำอีกชุด
-    else if (tab === 'addmachine') c1fixLoadSites();
+    // c1fixLoadSites() ซ้ำได้เลย ไม่ต้องเขียนฟังก์ชันโหลดหน้างานซ้ำอีกชุด + โหลดลิสต์ประเภทรถด้วย
+    else if (tab === 'addmachine') { c1fixLoadSites(); c1addLoadTypes(); }
     else c1LoadHistory();
   }
 
@@ -2537,6 +2540,20 @@
       })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); })
       .finally(function () { document.getElementById('c1fix-submitBtn').disabled = false; });
+  }
+
+  /** โหลดลิสต์ "ประเภทรถ" มาตรฐานมาทำ dropdown ค้นหาได้ (23 ส.ค. 2569 - ดึงจากแท็บ "Data" คอลัมน์
+   *  "ประเภทรถ/เครื่องจักร" ในไฟล์ทะเบียนเครื่องจักร ดู getVehicleTypeList ใน MasterData.gs) */
+  function c1addLoadTypes() {
+    callServer('getVehicleTypeList').then(function (list) {
+      var dl = document.getElementById('c1add-typeList');
+      dl.innerHTML = '';
+      list.forEach(function (t) {
+        var opt = document.createElement('option');
+        opt.value = t;
+        dl.appendChild(opt);
+      });
+    });
   }
 
   /** เพิ่มเครื่องจักรใหม่เข้าทะเบียน master (23 ส.ค. 2569) ดู addMachine ใน MasterData.gs */
