@@ -74,6 +74,9 @@
   }
   .route-line.to .route-label { color: var(--primary); }
   .route-value { color: var(--ink); line-height: 1.4; }
+  /* 23 ส.ค. 2569 - แยกแต่ละคันภายในการ์ดเที่ยวรวม (เสมียน2 ออก/แก้เลข PJ) ดู c2Render/c2LoadHistory */
+  .c2-trip-item { padding: 6px 0; border-top: 1px dashed var(--border); margin-top: 6px; }
+  .c2-trip-item:first-child { border-top: none; margin-top: 0; }
   .badge {
     display: inline-block;
     font-size: 11px;
@@ -783,8 +786,8 @@
     releaseJob: ['userId', 'requestId'],
     markMovedSelfPropelled: ['userId', 'requestId', 'actualDate'],
     editRequestFields: ['userId', 'requestId', 'patch'],
-    issuePjNumber: ['userId', 'requestId', 'pjNumber'],
-    editPjNumber: ['userId', 'requestId', 'pjNumber'],
+    issuePjNumber: ['userId', 'requestIds', 'pjNumber'],
+    editPjNumber: ['userId', 'requestIds', 'pjNumber'],
     closeJob: ['userId', 'requestId'],
     markSiteReviewed: ['userId', 'siteName', 'note'],
     correctMachineLocation: ['userId', 'machineCode', 'newSite'],
@@ -2658,32 +2661,49 @@
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
-  function c2Render(rows, rentalByRequestId) {
+  /**
+   * 23 ส.ค. 2569 - rows เปลี่ยนจาก array ของคำขอเดี่ยวๆ เป็น array ของกลุ่ม { tripId, requests: [...] }
+   * (มาจาก groupRequestsByTrip_ ฝั่ง Requests.gs) เพื่อรวมคำขอที่คนขับรับพร้อมกันเป็นเที่ยวเดียว (รหัสเที่ยวรถ
+   * ตรงกัน) ให้เป็นการ์ดเดียว ออกเลข PJ ครั้งเดียวได้เลขเดียวกันทั้งเที่ยว กันเสมียน3 ปิดงานแยกแล้วคิดค่าเที่ยว
+   * ซ้ำซ้อน กลุ่มที่มีคำขอเดียว (ไม่มีรหัสเที่ยวรถ) ก็ยังแสดงเหมือนเดิมทุกอย่าง แค่ห่อด้วย requests: [แถวเดียว]
+   */
+  function c2Render(groups, rentalByRequestId) {
     rentalByRequestId = rentalByRequestId || {};
     var el = document.getElementById('c2-list');
-    if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานค้างออกเลข PJ</div>'; return; }
-    el.innerHTML = rows.map(function (r) {
-      var id = r['Request ID'];
-      var rental = rentalByRequestId[id];
+    if (!groups.length) { el.innerHTML = '<div class="empty">ไม่มีงานค้างออกเลข PJ</div>'; return; }
+    el.innerHTML = groups.map(function (g) {
+      var ids = g.requests.map(function (r) { return r['Request ID']; });
+      var isTrip = g.requests.length > 1;
+      var repRow = g.requests[0];
+      var machinesHtml = g.requests.map(function (r) {
+        var id = r['Request ID'];
+        var rental = rentalByRequestId[id];
+        return (isTrip ? '<div class="c2-trip-item">' : '') +
+          '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
+          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
+          (r['วันที่ขนย้ายจริง'] ? '<div class="row"><span class="label">วันที่-เวลาย้ายเสร็จ</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' : '') +
+          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+          (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
+          (isTrip ? '</div>' : '');
+      }).join('');
       return '<div class="card">' +
-        '<span class="' + statusBadgeClass(r['สถานะการย้าย (แกน A)']) + '">' + r['สถานะการย้าย (แกน A)'] + '</span>' +
-        '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
-        '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
-        '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
-        (r['วันที่ขนย้ายจริง'] ? '<div class="row"><span class="label">วันที่-เวลาย้ายเสร็จ</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' : '') +
-        '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-        (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
-        '<input type="text" id="c2-pj-' + id + '" placeholder="กรอกเลข PJ">' +
-        '<button onclick="c2Issue(\'' + id + '\', this)">บันทึกเลข PJ</button>' +
+        '<span class="' + statusBadgeClass(repRow['สถานะการย้าย (แกน A)']) + '">' + repRow['สถานะการย้าย (แกน A)'] + '</span>' +
+        (isTrip ? '<div class="row"><span class="label">🚚 เที่ยวรวม</span><span>' + g.requests.length + ' คัน (ออกเลข PJ เดียวกันทั้งเที่ยว)</span></div>' : '') +
+        '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(repRow['วันที่ขอ']) + '</span></div>' +
+        machinesHtml +
+        '<input type="text" placeholder="กรอกเลข PJ">' +
+        '<button data-ids=\'' + JSON.stringify(ids) + '\' onclick="c2Issue(this)">บันทึกเลข PJ</button>' +
         '</div>';
     }).join('');
   }
 
-  function c2Issue(id, btn) {
-    var pj = document.getElementById('c2-pj-' + id).value.trim();
+  function c2Issue(btn) {
+    var ids = JSON.parse(btn.getAttribute('data-ids'));
+    var pjInput = btn.closest('.card').querySelector('input[type="text"]');
+    var pj = pjInput.value.trim();
     if (!pj) return showToast('กรุณากรอกเลข PJ');
     btn.disabled = true;
-    callServer('issuePjNumber', CURRENT_USER.userId, id, pj)
+    callServer('issuePjNumber', CURRENT_USER.userId, ids, pj)
       .then(function () { showToast('บันทึกแล้ว'); c2Load(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); btn.disabled = false; });
   }
@@ -2707,30 +2727,47 @@
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
+  /** 23 ส.ค. 2569 - groups เป็น array ของ { tripId, requests: [...] } เหมือน c2Render ด้านบน (ดูคอมเมนต์
+   *  ประกอบที่นั่น) เพื่อให้แก้เลข PJ ทั้งเที่ยวรถพร้อมกันได้ในคลิกเดียว */
   function c2LoadHistory() {
-    callServer('listPjHistory', CURRENT_USER.userId).then(function (rows) {
+    callServer('listPjHistory', CURRENT_USER.userId).then(function (groups) {
       var el = document.getElementById('c2-historyList');
-      if (!rows.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
-      el.innerHTML = rows.map(function (r) {
+      if (!groups.length) { el.innerHTML = '<div class="empty">ยังไม่มีประวัติ</div>'; return; }
+      el.innerHTML = groups.map(function (g) {
+        var ids = g.requests.map(function (r) { return r['Request ID']; });
+        var isTrip = g.requests.length > 1;
+        var repRow = g.requests[0];
+        var machinesHtml = g.requests.map(function (r) {
+          return (isTrip ? '<div class="c2-trip-item">' : '') +
+            '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
+            '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
+            '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
+            (isTrip ? '</div>' : '');
+        }).join('');
         return '<div class="card">' +
-          '<span class="badge">PJ: ' + r['เลข PJ'] + '</span>' +
-          '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + r['Request ID'] + '</span></div>' +
-          '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(r['วันที่ขอ']) + '</span></div>' +
-          '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
-          '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-          '<div class="row"><span class="label">ออกเลขโดย</span><span>' + (r['ผู้ออกเลข PJ + เวลา'] || '-') + '</span></div>' +
-          '<button class="secondary" onclick="c2EditPjPrompt(\'' + r['Request ID'] + '\', \'' + (r['เลข PJ'] || '').replace(/'/g, '') + '\')">แก้ไขเลข PJ (กรอกผิด)</button>' +
+          '<span class="badge">PJ: ' + repRow['เลข PJ'] + '</span>' +
+          (isTrip ? '<div class="row"><span class="label">🚚 เที่ยวรวม</span><span>' + g.requests.length + ' คัน</span></div>' : '') +
+          '<div class="row"><span class="label">วันที่ส่งคำขอ</span><span>' + formatDateTH_(repRow['วันที่ขอ']) + '</span></div>' +
+          machinesHtml +
+          '<div class="row"><span class="label">ออกเลขโดย</span><span>' + (repRow['ผู้ออกเลข PJ + เวลา'] || '-') + '</span></div>' +
+          '<button class="secondary" data-ids=\'' + JSON.stringify(ids) + '\' data-current-pj="' + (repRow['เลข PJ'] || '').replace(/"/g, '') + '" onclick="c2EditPjPrompt(this)">แก้ไขเลข PJ (กรอกผิด)</button>' +
           '</div>';
       }).join('');
     }).catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
-  /** แก้ไขเลข PJ ที่ออกไปแล้ว (23 ส.ค. 2569 - เจอเคสกรอกผิดพลาด) ดู editPjNumber ใน Requests.gs */
-  function c2EditPjPrompt(id, currentPj) {
-    var val = prompt('แก้ไขเลข PJ ของคำขอ #' + id + ':', currentPj || '');
+  /** แก้ไขเลข PJ ที่ออกไปแล้ว (23 ส.ค. 2569 - เจอเคสกรอกผิดพลาด, ปรับ 23 ส.ค. 2569 ให้รับ ids เป็น array
+   *  แก้ทั้งเที่ยวรถพร้อมกันได้) ดู editPjNumber ใน Requests.gs */
+  function c2EditPjPrompt(btn) {
+    var ids = JSON.parse(btn.getAttribute('data-ids'));
+    var currentPj = btn.getAttribute('data-current-pj') || '';
+    var promptLabel = ids.length > 1 ?
+      'แก้ไขเลข PJ ของทั้งเที่ยว (' + ids.length + ' คัน):' :
+      'แก้ไขเลข PJ ของคำขอ #' + ids[0] + ':';
+    var val = prompt(promptLabel, currentPj);
     if (val === null) return;
     if (!val.trim()) return showToast('กรุณาระบุเลข PJ');
-    callServer('editPjNumber', CURRENT_USER.userId, id, val.trim())
+    callServer('editPjNumber', CURRENT_USER.userId, ids, val.trim())
       .then(function () { showToast('แก้ไขเลข PJ แล้ว'); c2LoadHistory(); })
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
