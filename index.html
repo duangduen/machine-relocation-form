@@ -2780,6 +2780,10 @@
       .catch(function (err) { showToast('ผิดพลาด: ' + err); });
   }
 
+  /** 23 ส.ค. 2569 - แก้เคส Nan แจ้ง: งานที่ย้ายเสร็จแล้วของเครื่องจักรขับเคลื่อนตัวเอง (ไม่ผ่าน claimJob)
+   *  จะยังไม่มี "คนขับที่รับงาน + เวลารับ" (แถวนี้จะโผล่ในคิวรอตรวจสอบสั้นๆ ก่อนเสมียน2 ออกเลข PJ แล้วปิดงาน
+   *  อัตโนมัติ - ดู issuePjNumber ใน Requests.gs) เดิมโชว์แถว "คนขับ" ว่างเปล่า ดูสับสน จึงซ่อนแถวนี้แล้วใส่
+   *  badge อธิบายแทนสำหรับเคสนี้โดยเฉพาะ */
   function c3Render(rows) {
     var el = document.getElementById('c3-list');
     if (!rows.length) { el.innerHTML = '<div class="empty">ไม่มีงานรอตรวจสอบ</div>'; return; }
@@ -2787,12 +2791,14 @@
       var id = r['Request ID'];
       var hasPj = r['สถานะเอกสาร PJ (แกน B)'] === 'ออกเลขแล้ว';
       var photo = r['รูปหลักฐานการย้าย'];
+      var isSelfPropelled = r['ขับเคลื่อนตัวเอง'] === 'Y';
       return '<div class="card">' +
         '<span class="badge">PJ: ' + r['สถานะเอกสาร PJ (แกน B)'] + (hasPj ? ' (' + r['เลข PJ'] + ')' : '') + '</span>' +
+        (isSelfPropelled ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง - ไม่มีคนขับ/ค่าเที่ยว จะปิดงานอัตโนมัติหลังออกเลข PJ</span>' : '') +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
-        '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>' +
+        (isSelfPropelled ? '' : '<div class="row"><span class="label">คนขับ</span><span>' + r['คนขับที่รับงาน + เวลารับ'] + '</span></div>') +
         '<div class="row"><span class="label">วันที่ขนย้ายจริง</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' +
         '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
         '<div class="row"><span class="label">ระยะทาง</span><span>' + (r['ระยะทาง (กม.)'] || r['ระยะทาง (กม.)'] === 0 ? r['ระยะทาง (กม.)'] + ' กม.' : '-') + '</span></div>' +
