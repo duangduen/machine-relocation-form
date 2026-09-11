@@ -77,6 +77,25 @@
   /* 23 ส.ค. 2569 - แยกแต่ละคันภายในการ์ดเที่ยวรวม (เสมียน2 ออก/แก้เลข PJ) ดู c2Render/c2LoadHistory */
   .c2-trip-item { padding: 6px 0; border-top: 1px dashed var(--border); margin-top: 6px; }
   .c2-trip-item:first-child { border-top: none; margin-top: 0; }
+  /* 10 ก.ย. 2569 - dropdown ค้นหาฉลาด (ใช้แทน datalist ของเบราว์เซอร์ทุกช่องที่มี list="...") ดู ssEnhance_ */
+  .ss-wrap { position: relative; }
+  .ss-dd {
+    position: absolute; left: 0; right: 0; top: calc(100% - 8px); z-index: 60;
+    background: #fff; border: 1px solid #d3d7dc; border-radius: 8px; max-height: 240px; overflow-y: auto;
+    box-shadow: 0 6px 18px rgba(16,24,40,0.14);
+  }
+  .ss-item { padding: 9px 12px; font-size: 13px; line-height: 1.35; cursor: pointer; border-bottom: 1px solid #f0f2f4; }
+  .ss-item:last-child { border-bottom: none; }
+  .ss-item.ss-active, .ss-item:hover { background: #eef4fb; }
+  .ss-item.ss-near { color: #6b7280; }
+  .ss-nearTag { font-size: 10px; color: #e65100; background: #fff3e0; border-radius: 6px; padding: 1px 6px; margin-left: 6px; }
+  .ss-empty { padding: 9px 12px; font-size: 12px; color: #999; }
+  /* ชั้นที่ 2 - ป้ายสถานะช่องปลายทาง (เลือกจากรายการ = เขียว / ไม่อยู่ในรายการ = ส้ม) */
+  input.ss-ok { border-color: #2e7d32 !important; box-shadow: 0 0 0 3px rgba(46,125,50,0.12) !important; }
+  input.ss-warn { border-color: #ef6c00 !important; box-shadow: 0 0 0 3px rgba(239,108,0,0.14) !important; }
+  .ss-status { font-size: 11px; font-weight: 600; margin: -6px 0 10px; }
+  .ss-status.ok { color: #2e7d32; }
+  .ss-status.warn { color: #e65100; }
   .badge {
     display: inline-block;
     font-size: 11px;
@@ -269,8 +288,10 @@
       <div id="req-batchList"></div>
 
       <label>ปลายทาง (หน้างานที่จะย้ายไป)</label>
-      <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย">
+      <input id="req-destination" list="req-siteList" placeholder="พิมพ์ค้นหา หรือพิมพ์ชื่อใหม่ได้เลย" autocomplete="off">
       <datalist id="req-siteList"></datalist>
+      <!-- ชั้นที่ 2 (10 ก.ย. 2569) - ป้ายบอกว่าปลายทางที่พิมพ์อยู่ตรงกับรายชื่อหน้างานไหม (ดู reqUpdateDestStatus_) -->
+      <div id="req-destStatus" class="ss-status" style="display:none;"></div>
 
       <label>วันที่ต้องการย้าย *</label>
       <input id="req-wantedDate" type="date" required>
@@ -951,6 +972,181 @@
     'เสมียน4': '🔧 ซ่อมบำรุง'
   };
 
+  /* =====================================================================================
+   * ค้นหาฉลาด (Smart search) - 10 ก.ย. 2569 - ยกแนวคิดมาจากระบบขอเบิกรถดั๊มพ่วง
+   * ชั้นที่ 1: ใช้แทน <datalist> ของเบราว์เซอร์ทุกช่องที่มี list="..." (เครื่องจักร/หน้างาน ทุกบทบาท)
+   *   - normalize ภาษาไทย: ํ+า (2 ตัว) = ำ (1 ตัว), ตัดวรรณยุกต์/การันต์ทิ้ง, ตัวพิมพ์เล็ก-ใหญ่ไม่สน
+   *   - พิมพ์หลายคำเรียงยังไงก็ได้ ("วังบัว กำแพงเพชร" เจอ "…วังบัว จ.กำแพงเพชร")
+   *   - รหัสงานพิมพ์แบบไหนก็เจอ ("sp6909" เจอ "SP.69/09" เพราะเทียบแบบตัดเครื่องหมาย/ช่องว่างออก)
+   *   - พิมพ์ผิดนิดหน่อยยังโผล่รายการ "ใกล้เคียง" (approximate substring - ผิดได้ 1-2 ตัวอักษร)
+   * HTML/โค้ดเดิมที่เติม <option> ลง datalist ไม่ต้องแก้เลย - ตัว dropdown อ่าน option จาก datalist สดๆ ทุกครั้ง
+   * และตอนเลือกจะ set input.value แล้วยิง event 'input'+'change' ให้ listener เดิม (เช่น reqMachineByLabel)
+   * ทำงานต่อได้เหมือนเดิม
+   * ===================================================================================== */
+  // ต้องตรงกับ NEW_SITE_FLAG_ ใน Requests.gs ทุกตัวอักษร (backend ใส่นำหน้า Comment/หมายเหตุ ไว้ให้)
+  var NEW_SITE_FLAG = '❗ หน้างานใหม่ ไม่อยู่ในรายชื่อ กรุณาตรวจสอบว่าไม่ใช่งานเดิมพิมพ์ผิด';
+
+  function ssNormalize_(s) {
+    s = String(s == null ? '' : s).toLowerCase();
+    if (s.normalize) s = s.normalize('NFC');
+    s = s.replace(/ํา/g, 'ำ');            // นิคหิต+สระอา -> สระอำ (คนละ Unicode แต่หน้าตาเหมือนกัน)
+    s = s.replace(/[่-์๎]/g, '');           // ่ ้ ๊ ๋ ์ ๎ (วรรณยุกต์/การันต์/ยามักการ) ตัดทิ้ง
+    s = s.replace(/[.\-_\/\\(),:;|"'\[\]]+/g, ' ');        // เครื่องหมายคั่น -> ช่องว่าง
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+  function ssCompact_(s) { return ssNormalize_(s).replace(/\s+/g, ''); }
+
+  /** approximate substring: pat อยู่ใน text โดยผิดได้ไม่เกิน maxD ตัว (Sellers algorithm O(n*m)) */
+  function ssFuzzyContains_(text, pat) {
+    var m = pat.length, n = text.length;
+    if (!m || !n || m > n + 2) return false;
+    var maxD = m >= 8 ? 2 : 1;
+    var prev = [], cur = [], i, j;
+    for (i = 0; i <= m; i++) prev[i] = i;
+    for (j = 1; j <= n; j++) {
+      cur[0] = 0;
+      for (i = 1; i <= m; i++) {
+        var cost = pat.charAt(i - 1) === text.charAt(j - 1) ? 0 : 1;
+        cur[i] = Math.min(prev[i] + 1, cur[i - 1] + 1, prev[i - 1] + cost);
+      }
+      if (cur[m] <= maxD) return true;
+      var t = prev; prev = cur; cur = t;
+    }
+    return false;
+  }
+
+  /** คะแนนความตรง (0 = ไม่ตรงเลย, ยิ่งมากยิ่งตรง) ค่า < 200 ถือเป็น "ใกล้เคียง" */
+  function ssScore_(query, candidate) {
+    var q = ssNormalize_(query);
+    if (!q) return 1;
+    var c = ssNormalize_(candidate);
+    if (c === q) return 1000;
+    if (c.indexOf(q) === 0) return 500;
+    if (c.indexOf(q) !== -1) return 400;
+    var qc = q.replace(/\s+/g, ''), cc = c.replace(/\s+/g, '');
+    if (cc.indexOf(qc) !== -1) return 300;
+    var tokens = q.split(' ');
+    var found = 0;
+    for (var i = 0; i < tokens.length; i++) {
+      if (c.indexOf(tokens[i]) !== -1 || cc.indexOf(tokens[i]) !== -1) found++;
+    }
+    if (tokens.length > 1 && found === tokens.length) return 200;
+    if (tokens.length > 1 && found >= Math.ceil(tokens.length * 0.6)) return 100 + found;
+    if (qc.length >= 3 && ssFuzzyContains_(cc, qc)) return 50;
+    return 0;
+  }
+
+  /** ตัวเลือกที่ตรงที่สุดจาก options (array ของ string) - คืน {value, score} หรือ null */
+  function ssBestMatch_(query, options) {
+    var best = null;
+    for (var i = 0; i < options.length; i++) {
+      var s = ssScore_(query, options[i]);
+      if (s > 0 && (!best || s > best.score)) best = { value: options[i], score: s };
+    }
+    return best;
+  }
+
+  function ssEsc_(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /** เปลี่ยน <input list="xxx"> ให้ใช้ dropdown ค้นหาฉลาดของเราแทน datalist ของเบราว์เซอร์ */
+  function ssEnhance_(input) {
+    if (input.__ssEnhanced) return;
+    input.__ssEnhanced = true;
+    var listId = input.getAttribute('list');
+    input.removeAttribute('list');
+    input.setAttribute('autocomplete', 'off');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'ss-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    var dd = document.createElement('div');
+    dd.className = 'ss-dd';
+    dd.style.display = 'none';
+    wrap.appendChild(dd);
+
+    var items = [], active = -1;
+    var suppressRender = false; // กัน event 'input' ที่เรายิงเองตอน pick ไปเปิด dropdown ซ้ำ
+
+    function getOptions() {
+      var dl = document.getElementById(listId);
+      if (!dl) return [];
+      var out = [];
+      for (var i = 0; i < dl.options.length; i++) out.push(dl.options[i].value);
+      return out;
+    }
+    function hide() { dd.style.display = 'none'; active = -1; }
+    function render() {
+      if (suppressRender) return;
+      var q = input.value;
+      var opts = getOptions();
+      var scored = [];
+      for (var i = 0; i < opts.length; i++) {
+        var s = ssScore_(q, opts[i]);
+        if (s > 0) scored.push({ v: opts[i], s: s, i: i });
+      }
+      scored.sort(function (a, b) { return b.s - a.s || a.i - b.i; });
+      items = scored.slice(0, 40);
+      active = -1;
+      if (!items.length) {
+        dd.innerHTML = opts.length ? '<div class="ss-empty">ไม่พบรายการที่ตรง - พิมพ์ต่อได้เลยถ้าเป็นชื่อใหม่</div>' : '';
+        dd.style.display = opts.length ? 'block' : 'none';
+        return;
+      }
+      dd.innerHTML = items.map(function (x, idx) {
+        var near = x.s < 200 && ssNormalize_(q);
+        return '<div class="ss-item' + (near ? ' ss-near' : '') + '" data-idx="' + idx + '">' +
+          ssEsc_(x.v) + (near ? '<span class="ss-nearTag">ใกล้เคียง</span>' : '') + '</div>';
+      }).join('');
+      dd.style.display = 'block';
+    }
+    function pick(idx) {
+      if (idx < 0 || idx >= items.length) return;
+      input.value = items[idx].v;
+      suppressRender = true;
+      try {
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      } finally {
+        suppressRender = false;
+      }
+      hide();
+    }
+    function setActive(idx) {
+      var els = dd.querySelectorAll('.ss-item');
+      for (var i = 0; i < els.length; i++) els[i].classList.toggle('ss-active', i === idx);
+      active = idx;
+      if (els[idx] && els[idx].scrollIntoView) els[idx].scrollIntoView({ block: 'nearest' });
+    }
+
+    input.addEventListener('input', render);
+    input.addEventListener('focus', render);
+    input.addEventListener('blur', function () { setTimeout(hide, 150); });
+    input.addEventListener('keydown', function (e) {
+      if (dd.style.display === 'none') return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(active + 1, items.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(active - 1, 0)); }
+      else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(active); } else hide(); }
+      else if (e.key === 'Escape') hide();
+    });
+    // ใช้ mousedown (ไม่ใช่ click) เพราะ blur ของ input จะเกิดก่อน click ทำให้ dropdown หายก่อนกดโดน
+    dd.addEventListener('mousedown', function (e) {
+      var el = e.target.closest ? e.target.closest('.ss-item') : null;
+      if (!el) return;
+      e.preventDefault();
+      pick(parseInt(el.getAttribute('data-idx'), 10));
+    });
+  }
+  function ssEnhanceAll_() {
+    var inputs = document.querySelectorAll('input[list]');
+    for (var i = 0; i < inputs.length; i++) ssEnhance_(inputs[i]);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ssEnhanceAll_);
+  else ssEnhanceAll_();
+
   async function initApp() {
     var stage = 'liff.init';
     try {
@@ -1255,11 +1451,18 @@
   }
 
   var reqAutoRefreshTimer_ = null;
+  var reqDestListenerAttached_ = false;
   function reqInit() {
     reqLoadMachines();
     reqLoadSites();
     reqLoadMyList();
     pauLoadMachines();
+
+    // ชั้นที่ 2 (10 ก.ย. 2569) - อัปเดตป้ายสถานะช่องปลายทางทุกครั้งที่พิมพ์/เลือก (แนบครั้งเดียว)
+    if (!reqDestListenerAttached_) {
+      reqDestListenerAttached_ = true;
+      document.getElementById('req-destination').addEventListener('input', reqUpdateDestStatus_);
+    }
 
     // รีเฟรชรายชื่อเครื่องจักร/หน้างานเป็นระยะ ระหว่างที่อยู่แท็บนี้ กันข้อมูล "ตำแหน่งปัจจุบัน" ค้าง
     // เก่า เผื่อ user เปิดหน้านี้แช่ไว้นานโดยไม่ได้สลับแท็บ/รีเฟรชหน้าเว็บเอง แล้วมีเครื่องจักรถูกย้าย
@@ -1478,7 +1681,61 @@
         opt.value = reqSiteLabel_(s);
         originDl.appendChild(opt);
       });
+      reqUpdateDestStatus_(); // รายชื่อเพิ่งมา/รีเฟรช - ป้ายสถานะปลายทางอาจเปลี่ยน
     });
+  }
+
+  /**
+   * ชั้นที่ 2 (10 ก.ย. 2569 - concept จากระบบรถดั๊มพ่วง) - ป้ายสถานะช่องปลายทาง
+   * เขียว ✅ = ค่าในช่องตรงกับรายการหน้างานเป๊ะ (เลือกจากรายการแล้ว) / ส้ม ⚠️ = ชื่อนี้ไม่อยู่ในรายการ
+   * ให้ช่างเห็นชัดก่อนกดส่ง ว่ากำลังจะส่งชื่อหน้างานที่ระบบไม่รู้จัก (มักเป็นงานเดิมพิมพ์ผิด/สะกดต่างกัน)
+   */
+  function reqUpdateDestStatus_() {
+    var input = document.getElementById('req-destination');
+    var st = document.getElementById('req-destStatus');
+    var typed = input.value.trim();
+    input.classList.remove('ss-ok', 'ss-warn');
+    st.classList.remove('ok', 'warn');
+    if (!typed || !reqSites.length) { st.style.display = 'none'; return; }
+    if (reqSiteByLabel[typed]) {
+      input.classList.add('ss-ok'); st.classList.add('ok');
+      st.textContent = '✅ เลือกจากรายการแล้ว';
+    } else {
+      input.classList.add('ss-warn'); st.classList.add('warn');
+      var best = ssBestMatch_(typed, Object.keys(reqSiteByLabel));
+      st.textContent = '⚠️ ชื่อนี้ไม่อยู่ในรายการหน้างาน' +
+        (best && best.score >= 50 ? ' - ใกล้เคียง: ' + best.value : '');
+    }
+    st.style.display = 'block';
+  }
+
+  /**
+   * ชั้นที่ 3 (10 ก.ย. 2569) - ยืนยันปลายทางตอนกดส่ง ถ้าชื่อไม่ตรงรายการ:
+   *   1) มีรายการใกล้เคียง → ถาม "คุณหมายถึง '…' ใช่หรือไม่?" ตกลง = แก้ค่าในช่องให้แล้วใช้ค่านั้น
+   *   2) ไม่ใช่/ไม่มีใกล้เคียง → ถาม "ยืนยันเป็นหน้างานใหม่จริงๆ?" ยืนยัน = ส่งพร้อม isNewSite ให้ backend
+   *      ติดป้าย ❗ ในการ์ดอนุมัติ (ดู submitOneRequest_ ใน Requests.gs / notifyNewRequest_ ใน Notify.gs)
+   * คืน { destination, destinationName, isNewSite } หรือ null ถ้าช่างกดยกเลิก (ผู้เรียกต้อง return ทันที)
+   */
+  function reqResolveDestination_() {
+    var input = document.getElementById('req-destination');
+    var typed = input.value.trim();
+    var matched = reqSiteByLabel[typed];
+    if (matched) return { destination: typed, destinationName: matched.name, isNewSite: false };
+
+    var best = ssBestMatch_(typed, Object.keys(reqSiteByLabel));
+    if (best && best.score >= 50) {
+      if (confirm('ปลายทาง "' + typed + '" ไม่อยู่ในรายชื่อหน้างาน\n\nคุณหมายถึง\n"' + best.value + '"\nใช่หรือไม่?\n\n' +
+        '(ตกลง = ใช้ชื่อนี้ / ยกเลิก = ยืนยันว่าเป็นหน้างานใหม่)')) {
+        input.value = best.value;
+        reqUpdateDestStatus_();
+        return { destination: best.value, destinationName: reqSiteByLabel[best.value].name, isNewSite: false };
+      }
+    }
+    if (!confirm('ยืนยันว่า "' + typed + '" เป็นหน้างานใหม่ที่ยังไม่มีในระบบจริงๆ ใช่หรือไม่?\n\n' +
+      'ระบบจะเพิ่มชื่อนี้เป็นหน้างานใหม่ และแจ้งผู้อนุมัติให้ตรวจสอบว่าไม่ใช่งานเดิมพิมพ์ผิด')) {
+      return null;
+    }
+    return { destination: typed, destinationName: typed, isNewSite: true };
   }
 
   function reqSetUrgency(urgent) {
@@ -1501,6 +1758,7 @@
     reqSetUrgency(false);
     reqBatchMachines = [];
     renderReqBatchList_();
+    reqUpdateDestStatus_();
   }
 
   function reqCancelEditMode() {
@@ -1531,6 +1789,7 @@
     document.getElementById('req-machineActiveWarning').style.display = 'none';
     document.getElementById('req-origin').value = r['ต้นทาง'] || '';
     document.getElementById('req-destination').value = r['ปลายทาง'] || '';
+    reqUpdateDestStatus_();
     document.getElementById('req-wantedDate').value = toDateInputValue_(r['วันที่ต้องการย้าย']);
     document.getElementById('req-note').value = r['Comment/หมายเหตุ'] || '';
     document.getElementById('req-selfPropelled').checked = r['ขับเคลื่อนตัวเอง'] === 'Y';
@@ -1636,10 +1895,13 @@
     if (!destinationTyped) return showToast('กรุณาระบุปลายทาง');
     if (!wantedDateTyped) return showToast('กรุณาระบุวันที่ต้องการย้าย');
 
-    var matchedSite = reqSiteByLabel[destinationTyped];
+    // ชั้นที่ 3 (10 ก.ย. 2569) - ยืนยันปลายทางที่ไม่ตรงรายการ / เสนอชื่อใกล้เคียง (ดู reqResolveDestination_)
+    var dest = reqResolveDestination_();
+    if (!dest) return;
     var sharedPayload = {
-      destination: destinationTyped,
-      destinationName: matchedSite ? matchedSite.name : destinationTyped, // ชื่อล้วนไม่มีรหัสนำหน้า ใช้เช็คหน้างานซ้ำฝั่ง server
+      destination: dest.destination,
+      destinationName: dest.destinationName, // ชื่อล้วนไม่มีรหัสนำหน้า ใช้เช็คหน้างานซ้ำฝั่ง server
+      isNewSite: dest.isNewSite,
       wantedDate: wantedDateTyped,
       urgency: reqIsUrgent ? 'ด่วน' : 'ไม่ด่วน',
       note: document.getElementById('req-note').value
@@ -1681,6 +1943,7 @@
         machines: machinesPayload,
         destination: sharedPayload.destination,
         destinationName: sharedPayload.destinationName,
+        isNewSite: sharedPayload.isNewSite,
         wantedDate: sharedPayload.wantedDate,
         urgency: sharedPayload.urgency,
         note: sharedPayload.note
@@ -1720,6 +1983,7 @@
       origin: originTyped,
       destination: sharedPayload.destination,
       destinationName: sharedPayload.destinationName,
+      isNewSite: sharedPayload.isNewSite,
       wantedDate: sharedPayload.wantedDate,
       urgency: sharedPayload.urgency,
       note: sharedPayload.note,
@@ -1812,8 +2076,11 @@
       // ไปโดยไม่รู้ตัว) ให้ผู้อนุมัติเห็นก่อนกดอนุมัติว่าคำขอนี้จะไม่เข้าคิวคนขับ เผื่อดูแล้วรู้สึกว่าไม่น่าใช่
       // จะได้ทักท้วงกับช่างก่อน แทนที่จะรู้ทีหลังตอนคนขับหาคำขอนี้ไม่เจอ
       var selfPropelledBadge = r['ขับเคลื่อนตัวเอง'] === 'Y' ? ' <span class="badge">🚜 ขับเคลื่อนตัวเอง (ไม่เข้าคิวคนขับ)</span>' : '';
+      // 10 ก.ย. 2569 - ป้ายหน้างานใหม่ (ปลายทางไม่อยู่ในรายชื่อ) - backend ใส่ NEW_SITE_FLAG นำหน้าหมายเหตุไว้
+      var newSiteBadge = String(r['Comment/หมายเหตุ'] || '').indexOf(NEW_SITE_FLAG) !== -1
+        ? ' <span class="badge" style="background:#fff3e0;color:#e65100;">' + NEW_SITE_FLAG + '</span>' : '';
       return '<div class="card' + urgentClass + '">' +
-        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') + batchBadge + selfPropelledBadge +
+        (r['ความเร่งด่วน'] === 'ด่วน' ? '<span class="badge urgent">🔴 ด่วน</span>' : '') + batchBadge + selfPropelledBadge + newSiteBadge +
         '<div class="row"><span class="label">เลขที่คำขอ</span><span>#' + id + '</span></div>' +
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
