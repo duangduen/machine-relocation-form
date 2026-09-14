@@ -292,6 +292,13 @@
       <datalist id="req-siteList"></datalist>
       <!-- ชั้นที่ 2 (10 ก.ย. 2569) - ป้ายบอกว่าปลายทางที่พิมพ์อยู่ตรงกับรายชื่อหน้างานไหม (ดู reqUpdateDestStatus_) -->
       <div id="req-destStatus" class="ss-status" style="display:none;"></div>
+      <!-- 14 ก.ย. 2569 - ถ้าเลือกหน้างานแบบกว้างๆ (เช่น "หน้างานทั่วไป") บังคับระบุสถานที่จริง แล้วบันทึกปลายทาง
+           เป็น "หน้างานทั่วไป - <สถานที่จริง>" ให้ทุกการ์ด/ตำแหน่งเครื่องจักรเห็นที่จริง (ดู reqResolveDestination_) -->
+      <div id="req-destDetailBox" style="display:none;">
+        <div style="font-size:11px;color:#e65100;margin:-4px 0 6px;">💡 ถ้ารู้ชื่อหน้างานจริง พิมพ์ชื่อจริงในช่องปลายทางแทนได้เลย ระบบจะเพิ่มหน้างานใหม่ให้ (ผู้อนุมัติจะเห็นป้าย ❗ ให้ตรวจสอบ)</div>
+        <label>ระบุสถานที่จริง *</label>
+        <input id="req-destDetail" placeholder="เช่น ซ่อมถนนหน้าวัดบ้านนายก ต.หนองหลวง" autocomplete="off">
+      </div>
 
       <label>วันที่ต้องการย้าย *</label>
       <input id="req-wantedDate" type="date" required>
@@ -599,6 +606,15 @@
     if (!code) return code || '';
     var t = MACHINE_TYPE_MAP_[code];
     return t ? (code + ' (' + t + ')') : code;
+  }
+
+  /** แถว "หมายเหตุ" สำหรับการ์ดทุกบทบาท (14 ก.ย. 2569 - เดิมโชว์แค่การ์ดผู้อนุมัติ พอช่างเขียนที่จริงไว้ใน
+   *  หมายเหตุ คนอื่นไม่เห็น) คืน '' ถ้าไม่มีหมายเหตุ - ขึ้นบรรทัดใหม่ตาม \n ในข้อความด้วย */
+  function noteRow_(r) {
+    var note = r && r['Comment/หมายเหตุ'];
+    if (!note) return '';
+    return '<div class="row"><span class="label">หมายเหตุ</span><span style="text-align:right;white-space:pre-line;">' +
+      String(note).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span></div>';
   }
 
   // ---------------------------------------------------------------------------------
@@ -1690,13 +1706,59 @@
    * เขียว ✅ = ค่าในช่องตรงกับรายการหน้างานเป๊ะ (เลือกจากรายการแล้ว) / ส้ม ⚠️ = ชื่อนี้ไม่อยู่ในรายการ
    * ให้ช่างเห็นชัดก่อนกดส่ง ว่ากำลังจะส่งชื่อหน้างานที่ระบบไม่รู้จัก (มักเป็นงานเดิมพิมพ์ผิด/สะกดต่างกัน)
    */
+  /**
+   * หน้างานแบบกว้างๆ ที่ไม่บอกที่จริง (14 ก.ย. 2569 - เจอเคสช่างเลือก "หน้างานทั่วไป" แล้วเขียนที่จริงไว้ใน
+   * หมายเหตุ ทำให้การ์ด/ตำแหน่งเครื่องจักรไม่รู้ว่าไปไหน) ถ้าชื่อหน้างาน (ส่วนชื่อ ไม่รวมรหัส) มีคำใดคำหนึ่งใน
+   * ลิสต์นี้ ฟอร์มจะบังคับกรอก "ระบุสถานที่จริง" แล้วบันทึกปลายทางเป็น "<หน้างาน> - <สถานที่จริง>"
+   * >>> เพิ่มชื่อหน้างานกว้างๆ อื่นๆ ได้ที่นี่ (เทียบแบบ normalize ไทย ไม่สนวรรณยุกต์/ตัวพิมพ์) <<<
+   */
+  var GENERIC_SITE_KEYWORDS = ['หน้างานทั่วไป', 'ทั่วไป', 'อื่นๆ', 'อื่น ๆ', 'ไม่ระบุ'];
+
+  function reqIsGenericSite_(site) {
+    if (!site || !site.name) return false;
+    var n = ssNormalize_(site.name);
+    for (var i = 0; i < GENERIC_SITE_KEYWORDS.length; i++) {
+      if (n.indexOf(ssNormalize_(GENERIC_SITE_KEYWORDS[i])) !== -1) return true;
+    }
+    return false;
+  }
+
+  /** ถ้าค่าในช่องปลายทางเป็นหน้างานกว้างๆ (ตรง label หรือ "label - รายละเอียด") คืน { label, detail } ไม่งั้น null */
+  function reqSplitGenericDest_(typed) {
+    var labels = Object.keys(reqSiteByLabel);
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      if (!reqIsGenericSite_(reqSiteByLabel[label])) continue;
+      if (typed === label) return { label: label, detail: '' };
+      if (typed.indexOf(label + ' - ') === 0) return { label: label, detail: typed.substring(label.length + 3).trim() };
+    }
+    return null;
+  }
+
   function reqUpdateDestStatus_() {
     var input = document.getElementById('req-destination');
     var st = document.getElementById('req-destStatus');
+    var detailBox = document.getElementById('req-destDetailBox');
+    var detailInput = document.getElementById('req-destDetail');
     var typed = input.value.trim();
     input.classList.remove('ss-ok', 'ss-warn');
     st.classList.remove('ok', 'warn');
-    if (!typed || !reqSites.length) { st.style.display = 'none'; return; }
+    if (!typed || !reqSites.length) { st.style.display = 'none'; detailBox.style.display = 'none'; return; }
+
+    // หน้างานกว้างๆ - โชว์ช่องระบุสถานที่จริง (ถ้าค่าในช่องมาแบบ "label - รายละเอียด" เช่นตอนแก้ไขคำขอเดิม
+    // ให้แยกรายละเอียดไปใส่ช่องด้านล่างแล้วเหลือแค่ label ในช่องปลายทาง)
+    var split = reqSplitGenericDest_(typed);
+    if (split) {
+      if (split.detail && !detailInput.value.trim()) detailInput.value = split.detail;
+      if (input.value !== split.label) input.value = split.label;
+      detailBox.style.display = 'block';
+      input.classList.add('ss-ok'); st.classList.add('ok');
+      st.textContent = '✅ หน้างานแบบกว้าง - กรุณาระบุสถานที่จริงด้านล่างด้วย';
+      st.style.display = 'block';
+      return;
+    }
+    detailBox.style.display = 'none';
+
     if (reqSiteByLabel[typed]) {
       input.classList.add('ss-ok'); st.classList.add('ok');
       st.textContent = '✅ เลือกจากรายการแล้ว';
@@ -1719,6 +1781,21 @@
   function reqResolveDestination_() {
     var input = document.getElementById('req-destination');
     var typed = input.value.trim();
+
+    // หน้างานกว้างๆ (14 ก.ย. 2569) - ต้องระบุสถานที่จริง แล้วบันทึกเป็น "label - สถานที่จริง" ส่วน destinationName
+    // ยังเป็นชื่อหน้างานกว้างๆ ล้วน (ไม่ให้ ensureSiteExists_ ไปสร้างหน้างานใหม่รกรายชื่อ)
+    var split = reqSplitGenericDest_(typed);
+    if (split) {
+      var detailInput = document.getElementById('req-destDetail');
+      var detail = (detailInput.value || '').trim() || split.detail;
+      if (!detail) {
+        showToast('กรุณาระบุสถานที่จริง (ปลายทางเป็นหน้างานแบบกว้าง)');
+        detailInput.focus();
+        return null;
+      }
+      return { destination: split.label + ' - ' + detail, destinationName: reqSiteByLabel[split.label].name, isNewSite: false };
+    }
+
     var matched = reqSiteByLabel[typed];
     if (matched) return { destination: typed, destinationName: matched.name, isNewSite: false };
 
@@ -1748,6 +1825,7 @@
     document.getElementById('req-machineInput').value = '';
     document.getElementById('req-origin').value = '';
     document.getElementById('req-destination').value = '';
+    document.getElementById('req-destDetail').value = '';
     document.getElementById('req-wantedDate').value = '';
     document.getElementById('req-note').value = '';
     document.getElementById('req-machineWarning').style.display = 'none';
@@ -1789,6 +1867,7 @@
     document.getElementById('req-machineActiveWarning').style.display = 'none';
     document.getElementById('req-origin').value = r['ต้นทาง'] || '';
     document.getElementById('req-destination').value = r['ปลายทาง'] || '';
+    document.getElementById('req-destDetail').value = ''; // reqUpdateDestStatus_ จะแยก "label - รายละเอียด" ให้เองถ้าเป็นหน้างานกว้าง
     reqUpdateDestStatus_();
     document.getElementById('req-wantedDate').value = toDateInputValue_(r['วันที่ต้องการย้าย']);
     document.getElementById('req-note').value = r['Comment/หมายเหตุ'] || '';
@@ -2035,6 +2114,7 @@
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
+          noteRow_(r) +
           (r['เหตุผลไม่อนุมัติ'] ? '<div class="row"><span class="label">เหตุผลไม่อนุมัติ</span><span>' + r['เหตุผลไม่อนุมัติ'] + '</span></div>' : '') +
           (isPending ?
             '<div class="card-actions">' +
@@ -2253,6 +2333,7 @@
           '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           '<div class="row"><span class="label">เลขไมล์ต้นทาง</span><span>' + (startMileage || 'ยังไม่ได้บันทึก') + '</span></div>' +
+          noteRow_(r) +
           '<div>' +
           '<button class="secondary" onclick="drvOpenStartMileageForm(\'' + id + '\')">📍 บันทึกเลขไมล์ต้นทาง</button>' +
           '<button class="success" onclick="drvOpenMovedForm(\'' + id + '\')">✅ ย้ายเสร็จแล้ว</button>' +
@@ -2283,6 +2364,7 @@
         '<div class="row"><span class="label">เครื่องจักร</span><span class="machine-value">' + machineTypeLabel_(r['เครื่องจักร/ทะเบียน']) + '</span></div>' +
         '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
         '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
+        noteRow_(r) +
         '<button class="drv-queueClaimBtn" onclick="drvClaim(\'' + id + '\', this)">รับงานนี้</button>' +
         '</div>';
     }).join('');
@@ -2711,6 +2793,7 @@
           '<div class="row"><span class="label">วันที่ต้องการย้าย</span><span>' + formatDateTH_(r['วันที่ต้องการย้าย']) + '</span></div>' +
           '<div class="row"><span class="label">ผู้ขอ</span><span>' + r['ผู้ขอย้าย'] + '</span></div>' +
           '<div class="row"><span class="label">คนขับ</span><span>' + (r['คนขับที่รับงาน + เวลารับ'] || '-') + '</span></div>' +
+          noteRow_(r) +
           (canCancel ? '<button class="danger" style="display:inline-block;width:auto;padding:4px 10px;font-size:12px;margin-top:6px;" onclick="c1CancelPrompt(\'' + r['Request ID'] + '\', this)">ยกเลิกคำขอ</button>' : '') +
           '</div>';
       }).join('');
@@ -2951,6 +3034,7 @@
           (r['วันที่ขนย้ายจริง'] ? '<div class="row"><span class="label">วันที่-เวลาย้ายเสร็จ</span><span>' + formatDateTH_(r['วันที่ขนย้ายจริง']) + '</span></div>' : '') +
           '<div class="route"><div class="route-line from"><span class="route-label">จาก</span><span class="route-value">' + r['ต้นทาง'] + '</span></div><div class="route-line to"><span class="route-label">ไป</span><span class="route-value">' + r['ปลายทาง'] + '</span></div></div>' +
           (rental ? '<div class="row"><span class="label">จำนวนวันคิดค่าเช่า' + (rental.interim ? ' (ชั่วคราว)' : '') + '</span><span><strong>' + rental.billableDays + ' วัน</strong></span></div>' : '') +
+          noteRow_(r) +
           (isTrip ? '</div>' : '');
       }).join('');
       return '<div class="card">' +
@@ -3070,6 +3154,7 @@
         '<div class="row"><span class="label">เลขไมล์ต้นทาง/ปลายทาง</span><span>' + (r['เลขไมล์ต้นทาง'] || '-') + ' → ' + (r['เลขไมล์ปลายทาง'] || '-') + '</span></div>' +
         '<div class="row"><span class="label">ระยะทาง</span><span>' + (r['ระยะทาง (กม.)'] || r['ระยะทาง (กม.)'] === 0 ? r['ระยะทาง (กม.)'] + ' กม.' : '-') + '</span></div>' +
         (photo ? '<div class="row"><a href="' + photo + '" target="_blank">ดูรูปหลักฐาน</a></div>' : '') +
+        noteRow_(r) +
         '<button class="success" ' + (hasPj ? '' : 'disabled') + ' onclick="c3Close(\'' + id + '\', this)">' +
         (hasPj ? 'บันทึกค่าเที่ยว / ปิดงาน' : 'รอเลข PJ ก่อน') + '</button>' +
         '</div>';
