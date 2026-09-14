@@ -850,7 +850,29 @@
    *  ข้างในเปลี่ยนจาก fetch() เป็น JSONP (อ่าน+เขียนข้อมูลเกือบทั้งหมด) / hidden-iframe form
    *  (เฉพาะ markMoved ตอนมีรูปแนบขนาดใหญ่จริงๆ) เพื่อเลี่ยงปัญหา CORS ใน LINE iOS in-app browser
    *  - ดูรายละเอียดที่ jsonpRequest / formPostRequest ด้านบน */
+  /**
+   * 14 ก.ย. 2569 (แก้แอปช้า) - รายการ master ที่หลายส่วนของหน้าเรียกซ้ำกันตอนเปิดแอป (getMachineList ถูกเรียก
+   * พร้อมกัน 3 ครั้งจาก loadMachineTypeMap_/reqLoadMachines/pauLoadMachines = 3 execution ของ Apps Script
+   * ทั้งที่ได้ผลเหมือนกัน) จำ promise ไว้ 15 วินาที ให้ทุกคนที่เรียกในช่วงนั้นแชร์ผลลัพธ์เดียวกัน
+   */
+  var MEMO_ACTIONS_ = { getMachineList: 15000, getSiteList: 15000, getVehicleTypeList: 15000 };
+  var memoCache_ = {};
   function callServer(fnName) {
+    var args = Array.prototype.slice.call(arguments, 1);
+
+    if (MEMO_ACTIONS_.hasOwnProperty(fnName)) {
+      var memoKey = fnName + ':' + JSON.stringify(args);
+      var hit = memoCache_[memoKey];
+      if (hit && Date.now() - hit.at < MEMO_ACTIONS_[fnName]) return hit.promise;
+      var p = callServerRaw_.apply(null, [fnName].concat(args));
+      memoCache_[memoKey] = { at: Date.now(), promise: p };
+      p.catch(function () { delete memoCache_[memoKey]; }); // พลาดแล้วไม่จำ ให้ลองใหม่ได้ทันที
+      return p;
+    }
+    return callServerRaw_.apply(null, [fnName].concat(args));
+  }
+
+  function callServerRaw_(fnName) {
     var args = Array.prototype.slice.call(arguments, 1);
 
     if (GET_ACTION_NAME.hasOwnProperty(fnName)) {
@@ -1487,10 +1509,12 @@
     reqAutoRefreshTimer_ = setInterval(function () {
       var sec = document.getElementById('section-request');
       if (!sec || sec.style.display === 'none') return; // สลับไปแท็บอื่นแล้ว ข้ามไปเฉยๆ ประหยัด request
+      if (document.hidden) return; // 14 ก.ย. 2569 - หน้าไม่ได้เปิดดูอยู่ (ย่อแอป/สลับแชท) ไม่ต้องยิงให้เปลืองโควตา
       reqLoadMachines();
       reqLoadSites();
       pauLoadMachines();
-    }, 60000); // ทุก 60 วินาที
+    }, 180000); // ทุก 3 นาที (14 ก.ย. 2569 - เดิม 60 วิ ทุกคนที่เปิดค้างไว้ยิง 3 request/นาที รวมกันหลายคนทำให้
+                // Apps Script/Sheets ช้าลงทั้งระบบ) - ตอนกลับมาเปิดหน้าใหม่ reqInit จะโหลดสดอยู่แล้ว
   }
 
   /* ---------- แจ้งหยุดใช้งานเครื่องจักร (feature: คำนวณค่าเช่าเครื่องจักร) ---------- */
